@@ -60,10 +60,26 @@ headlights and glowing park lamps.
 ## New city options
 
 When founding a city, pick:
+- **Play:** *Build it yourself*, or *Grows by itself* (see below).
 - **Budget:** Tight ($10k), Normal ($25k), Rich ($100k) or Unlimited (sandbox).
 - **Traffic:** Light (×0.6 cars, and nobody abandons their home), Normal, or Rush hour (×1.5 cars).
 - **Land:** River valley, Lakes, or Plains with no water.
 - **Unlocks:** earn them with population, or start with everything open.
+
+## Grows by itself
+
+In this mode the town plans itself while you watch. It starts as a boulevard and a few streets, then:
+- Lays new curving streets and side branches as homes fill up, zoning them by distance from the
+  centre and by what the town needs (homes, shops, industry, parks and car parks).
+- Closes loops by linking streets that are close on the map but far apart by road.
+- Fixes jams: yield junctions become lights, busy junctions become roundabouts, and crowded streets
+  are widened into avenues.
+- Builds a fire station, school, police station, hospital and stadium as the population passes each
+  milestone, and links new region connections as it grows.
+
+When the roads fill up, people make fewer trips, so the town recovers instead of gridlocking. The
+**Growing** button in the top bar pauses or resumes the planner, and every tool still works if you
+want to step in. Funds are unlimited and everything is unlocked.
 
 ## Places
 

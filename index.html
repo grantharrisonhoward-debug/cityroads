@@ -235,7 +235,7 @@ body { background: var(--bg); color: var(--ink); font-family: var(--f-body); fon
       <div class="meter"><div class="track"><div class="fill" id="dC" style="background:var(--com)"></div></div><span>C</span></div>
       <div class="meter"><div class="track"><div class="fill" id="dI" style="background:var(--ind)"></div></div><span>I</span></div>
     </div>
-    <div class="cell row2"><button id="btnCities" class="citiesbtn" title="Save, load or start cities">Cities</button><button id="btnStats" class="citiesbtn" title="Graphs of how the city is doing">Stats</button></div>
+    <div class="cell row2"><button id="btnCities" class="citiesbtn" title="Save, load or start cities">Cities</button><button id="btnStats" class="citiesbtn" title="Graphs of how the city is doing">Stats</button><button id="btnAuto" class="citiesbtn on" title="Pause or resume the city growing by itself" hidden>Growing</button></div>
     <div class="cell"><label id="sDate">Jan 2026</label>
       <div class="speeds">
         <button id="sp0" title="Pause (Space)" aria-label="Pause">II</button>
@@ -570,9 +570,10 @@ const lists = { homes: null, jobs: null, shops: null, factories: null };
 // options picked when founding a city
 const BUDGETS = { tight: 10000, normal: 25000, rich: 100000, unlimited: 1e9 };
 const TRAFFIC_MULT = { light: 0.6, normal: 1, rush: 1.5 };
-const DEFAULT_MODE = { budget: 'normal', traffic: 'normal', land: 'valley', unlockAll: false };
+const DEFAULT_MODE = { play: 'build', budget: 'normal', traffic: 'normal', land: 'valley', unlockAll: false };
 function newCity(seed, mode) {
   mode = { ...DEFAULT_MODE, ...(mode || {}) };
+  if (mode.play === 'grow') { mode.budget = 'unlimited'; mode.unlockAll = true; }
   return {
     seed, mode, hist: [], name: 'Riverton', money: BUDGETS[mode.budget] || 25000, time: 0, month: 0, monthAcc: 0, net: 0, milestone: 0,
     pop: 0, jc: 0, ji: 0, demand: { r: 1, c: 0, i: 0.5 }, flow: 100, commute: 1, speed: 1,
@@ -1014,7 +1015,7 @@ function removeEdges(list) {
   changed();
 }
 // restyle an existing road with a new design (or flip a one-way)
-function upgradeEdge(e, spec) {
+function upgradeEdge(e, spec, quiet) {
   const same = specOf(spec).key === e.S.key;
   if (same && !e.S.oneway) { toast('That road already uses this design.'); return false; }
   const oldCost = roadCost(e.pts, e.spec), newCost = roadCost(e.pts, spec);
@@ -1035,7 +1036,7 @@ function upgradeEdge(e, spec) {
   parksDirty = true; parksTimer = 0;
   changed();
   sfx('road');
-  toast(same ? `One-way reversed for $${fmt(cost)}.` : `Rebuilt as ${e.S.name} for $${fmt(cost)}.`);
+  if (!quiet) toast(same ? `One-way reversed for $${fmt(cost)}.` : `Rebuilt as ${e.S.name} for $${fmt(cost)}.`);
   return true;
 }
 function changed() { G.ver++; lotsDirty = true; fillCache = null; }
@@ -1250,9 +1251,9 @@ function serviceCandidate(x, y, type) {
   }
   return { l, why };
 }
-function placeService(x, y, type) {
+function placeService(x, y, type, quiet) {
   const S = SERVICES[type], { l, why } = serviceCandidate(x, y, type);
-  if (why) { toast(why + '.', 'bad'); return false; }
+  if (why) { if (!quiet) toast(why + '.', 'bad'); return false; }
   if (S.cost > G.money) { toast(`Not enough funds: a ${S.name.toLowerCase()} costs $${fmt(S.cost)}`, 'bad'); return false; }
   G.money -= S.cost;
   const rr = Math.hypot(l.w, l.d) / 2 + 2;
@@ -1265,7 +1266,7 @@ function placeService(x, y, type) {
   puff(lot.x, lot.y, 'dust', 14);
   particles.push({ x: lot.x, y: lot.y, life: 0, max: 0.9, kind: 'ring', size: rr });
   sfx('build');
-  toast(`${S.name} built for $${fmt(S.cost)}. ${S.note}`, 'good');
+  if (quiet) toast(`${G.name} opened a new ${S.name.toLowerCase()}.`); else toast(`${S.name} built for $${fmt(S.cost)}. ${S.note}`, 'good');
   if (type === 'stadium' && !G.evNext) G.evNext = G.time + 25;
   changed();
   return true;
@@ -1589,12 +1590,12 @@ function bakeZones() {
   zoneFor = P;
 }
 
-function paintCircle(x, y, r, z) {
+function paintCircle(x, y, r, z, onlyEmpty) {
   const c0x = Math.floor((x - r) / CELL), c1x = Math.floor((x + r) / CELL), c0y = Math.floor((y - r) / CELL), c1y = Math.floor((y + r) / CELL);
   let n = 0, erased = false;
   for (let cy = Math.max(0, c0y); cy <= Math.min(CH - 1, c1y); cy++) for (let cx = Math.max(0, c0x); cx <= Math.min(CW - 1, c1x); cx++) {
     const c = cy * CW + cx, px = cx * CELL + 5, py = cy * CELL + 5, d = dist(px, py, x, y);
-    if (d > r || water[c] || G.zone[c] === z) continue;
+    if (d > r || water[c] || G.zone[c] === z || (onlyEmpty && (G.zone[c] || roadMask[c]))) continue;
     if (G.zone[c]) erased = true;
     if (G.zone[c] >= ZP || z >= ZP) parksDirty = true;
     G.zone[c] = z;
@@ -1771,7 +1772,7 @@ function census() {
   G.pop = pop; G.jc = jc; G.ji = ji;
   lists.homes = weighted(homes); lists.jobs = weighted(jobs); lists.shops = weighted(shops); lists.factories = weighted(fac);
   const work = jc + ji;
-  const jam = clamp((G.commute - 1.5) * 0.8, 0, 1.3);
+  const jam = G.mode.play === 'grow' ? clamp((G.commute - 2) * 0.4, 0, 0.6) : clamp((G.commute - 1.5) * 0.8, 0, 1.3);
   G.demand.r = clamp(Math.min(0.35, svcR) + clamp((work + outJobs() - pop * 0.5) / Math.max(30, pop * 0.25), -1, 1) - jam, -1, 1);
   G.demand.c = clamp(clamp((pop * 0.16 - jc + 4) / Math.max(12, pop * 0.07), -1, 1) - jam * 0.5, -1, 1);
   G.demand.i = clamp(clamp((pop * 0.22 - ji + 12) / Math.max(15, pop * 0.1), -1, 1) - jam * 0.3, -1, 1);
@@ -1869,7 +1870,7 @@ function growTick() {
       continue;
     }
     if (l.z === ZR) {
-      const sad = b.happy > 2.6 || b.noRoute > 4 || !l.attach;
+      const sad = b.happy > (G.mode.play === 'grow' ? 3.2 : 2.6) || b.noRoute > 4 || !l.attach;
       b.bad = sad ? b.bad + 0.4 : Math.max(0, b.bad - 0.8);
       if (b.bad > 30 && G.mode.traffic !== 'light') { b.abandoned = true; b.abTime = G.time; toastOnce('abandon', 'People are leaving homes with terrible commutes. Check the Traffic view.', 'bad'); continue; }
     }
@@ -1918,6 +1919,222 @@ function endOfMonth() {
   checkUnlocks();
   if (G.month % 3 === 0) save(false);
 }
+// =====================================================================
+// organic growth: a planner that lays roads and zones by itself
+// =====================================================================
+function plan() {
+  if (!G.plan) { const n = [...G.nodes.values()].find(q => q.edges.length >= 3) || { x: 320, y: G.hy }; G.plan = { cx: n.x, cy: n.y, svc: 0, conn: 0, dead: [] }; }
+  return G.plan;
+}
+function seedOrganic() {
+  const pl = plan(), hy = G.hy;
+  const blvd = PRESETS.boulevard;
+  buildRoad(quadPts({ x: 320, y: hy }, { x: 390, y: hy + 6 }, { x: 460, y: hy - 4 }), blvd, null, null, true);
+  zoneAlong(quadPts({ x: 320, y: hy }, { x: 390, y: hy + 6 }, { x: 460, y: hy - 4 }), blvd);
+  zoneAlong([{ x: 320, y: hy - 110 }, { x: 320, y: hy + 110 }], PRESETS.street);
+  pl.cx = 380; pl.cy = hy;
+}
+// what to paint at a spot: a shopping core, homes around it, industry in a few outer pockets
+function organicZone(x, y) {
+  const pl = plan(), d = dist(x, y, pl.cx, pl.cy), n = vnoise(x * 0.004, y * 0.004, G.seed + 90);
+  const core = 80 + Math.sqrt(G.pop) * 4;
+  // each zone scores for suiting the spot plus how much the city wants it right now
+  const sR = (d < core ? 0.3 : 1) + G.demand.r;
+  const sC = (d < core ? 1.3 : 0.15) + G.demand.c * 1.3 + (n > 0.55 ? 0.3 : 0);
+  const sI = (d > 170 ? (n < 0.4 ? 1.1 : 0.2) : -2) + G.demand.i * 1.3;
+  const j = hash(Math.round(x), Math.round(y), G.seed + 8) * 0.25;
+  return sC + j > sR && sC >= sI ? ZC : sI + j > sR ? ZI : ZR;
+}
+function zoneAlong(pts, spec) {
+  const S = specOf(spec), L = polyLen(pts), sm = resample(pts, 6);
+  const mid = sm[Math.floor(sm.length / 2)];
+  const zs = [organicZone(mid.x + 30, mid.y + 30), organicZone(mid.x - 30, mid.y - 30)];
+  for (let i = 1; i < sm.length - 1; i += 2) {
+    const a = sm[i - 1], b = sm[i + 1], l = dist(a.x, a.y, b.x, b.y) || 1, nx = -(b.y - a.y) / l, ny = (b.x - a.x) / l;
+    [1, -1].forEach((side, k) => {
+      for (const [off, r] of [[S.w / 2 + 16, 18], [S.w / 2 + 34, 20]]) {
+        const x = sm[i].x + nx * side * off, y = sm[i].y + ny * side * off;
+        if (!waterNear(x, y, 6)) paintCircle(x, y, r, zs[k], true);
+      }
+    });
+  }
+  // the odd pocket park or car park
+  const r = hash(Math.round(mid.x), Math.round(mid.y), G.seed + 3);
+  if (L > 50 && r < 0.09) paintCircle(mid.x + 34, mid.y + 34, 30, ZP, true);
+  else if (L > 50 && r > 0.95 && zs[0] === ZC) paintCircle(mid.x - 30, mid.y + 30, 18, ZK, true);
+  flushZoneChanges();
+}
+// a proposed road must stay on the map, keep its distance from other roads and only cross water briefly
+function organicOK(pts, ownEdge, allowEnd) {
+  let water = 0;
+  const L = polyLen(pts), sm = resample(pts, 5);
+  for (let i = 0; i < sm.length; i++) {
+    const p = sm[i], s = i * (L / Math.max(1, sm.length - 1));
+    if (p.x < 30 || p.y < 30 || p.x > WW - 30 || p.y > WH - 30) return false;
+    if (waterAt(p.x, p.y)) water += 5;
+    if (s < 14 || (allowEnd && s > L - 22)) continue;
+    if (nearestRoad(p.x, p.y, 21, e => e !== ownEdge)) return false;
+    let blocked = false;
+    forLotsIn(p.x - 60, p.y - 60, p.x + 60, p.y + 60, l => { if (l.z === ZS && pointInLot(l, p.x, p.y, 12)) blocked = true; });
+    if (blocked) return false;
+  }
+  return water === 0 || (water <= 70 && G.pop > 200);
+}
+function tryRoad(start, dir, len, spec, ownEdge) {
+  const ang = Math.atan2(dir.y, dir.x) + (Math.random() - 0.5) * 0.5;
+  let end = { x: start.x + Math.cos(ang) * len, y: start.y + Math.sin(ang) * len };
+  // join a nearby road instead of stopping just short of it, so blocks close up
+  const near = nearestRoad(end.x, end.y, 26, (e, i) => e !== ownEdge && Math.abs(e.pts[i].z) < 0.3);
+  let snapB = null;
+  if (near) { end = { x: near.x, y: near.y }; }
+  else {
+    for (const n of G.nodes.values()) if (n.edges.length && dist(n.x, n.y, end.x, end.y) < 26 && Math.abs(n.z) < 0.3) { end = { x: n.x, y: n.y }; snapB = { node: n.id }; break; }
+  }
+  const mx = (start.x + end.x) / 2, my = (start.y + end.y) / 2, px = -(end.y - start.y) / len, py = (end.x - start.x) / len;
+  const bend = (Math.random() - 0.5) * len * 0.35;
+  const pts = quadPts(start, { x: mx + px * bend, y: my + py * bend }, end);
+  if (!organicOK(pts, ownEdge, !!(near || snapB))) return false;
+  const ok = buildRoad(pts.map(p => ({ x: p.x, y: p.y, z: 0 })), spec, start.node ? { node: start.node } : null, snapB, true);
+  if (ok) zoneAlong(pts, spec);
+  return ok;
+}
+function extendRoad() {
+  const pl = plan(), R = 260 + Math.sqrt(G.pop) * 14;
+  const ends = [...G.nodes.values()].filter(n => n.edges.length === 1 && !isOut(n.id) && !pl.dead.includes(n.id) && Math.abs(n.z) < 0.3 && dist(n.x, n.y, pl.cx, pl.cy) < R);
+  if (!ends.length) return false;
+  ends.sort((a, b) => dist(a.x, a.y, pl.cx, pl.cy) - dist(b.x, b.y, pl.cx, pl.cy) + (Math.random() - 0.5) * 160);
+  const n = ends[0], e = G.edges.get(n.edges[0]);
+  if (!e || e.S.freeway) { pl.dead.push(n.id); return false; }
+  const f = n.id === e.b ? pointAt(e, e.len) : pointAt(e, 0), sgn = n.id === e.b ? 1 : -1;
+  const spec = e.S.auto || e.S.lanes >= 4 && Math.random() < 0.5 ? PRESETS.street : Math.random() < 0.8 ? e.spec : PRESETS.street;
+  for (let k = 0; k < 3; k++) if (tryRoad({ x: n.x, y: n.y, node: n.id }, { x: f.tx * sgn, y: f.ty * sgn }, 45 + Math.random() * 45, spec, e)) return true;
+  pl.dead.push(n.id);
+  if (pl.dead.length > 400) pl.dead.splice(0, 200);
+  return false;
+}
+function branchRoad() {
+  const pl = plan(), R = 240 + Math.sqrt(G.pop) * 14;
+  const edges = [...G.edges.values()].filter(e => !e.S.noFront && !e.S.auto && e.len > 70 && e.zmax < 0.3 && e.zmin > -0.3 && dist(e.pts[0].x, e.pts[0].y, pl.cx, pl.cy) < R);
+  if (!edges.length) return false;
+  for (let tries = 0; tries < 4; tries++) {
+    const e = edges[(Math.random() * edges.length) | 0], s = 32 + Math.random() * (e.len - 64), f = pointAt(e, s);
+    if (waterAt(f.x, f.y)) continue;
+    let crowded = false;
+    for (const n of G.nodes.values()) if (n.edges.length && dist(n.x, n.y, f.x, f.y) < 34) { crowded = true; break; }
+    if (crowded) continue;
+    const side = Math.random() < 0.5 ? 1 : -1;
+    if (tryRoad({ x: f.x, y: f.y }, { x: f.nx * side, y: f.ny * side }, 45 + Math.random() * 40, PRESETS.street, e)) return true;
+  }
+  return false;
+}
+// close loops: link two spots that are near as the crow flies but far apart by road
+function graphDist(src) {
+  const d = new Map([[src.id, 0]]), done = new Set();
+  for (;;) {
+    let best = null, bd = Infinity;
+    for (const [id, v] of d) if (!done.has(id) && v < bd) { bd = v; best = id; }
+    if (best === null || bd > 1600) break;
+    done.add(best);
+    const n = G.nodes.get(best);
+    for (const eid of n.edges) {
+      const e = G.edges.get(eid); if (!e) continue;
+      const o = e.a === best ? e.b : e.a, nd = bd + e.len;
+      if (nd < (d.get(o) ?? Infinity)) d.set(o, nd);
+    }
+  }
+  return d;
+}
+function connectorRoad() {
+  const pl = plan(), R = 260 + Math.sqrt(G.pop) * 14;
+  const cand = [...G.nodes.values()].filter(n => n.edges.length && n.edges.length < 4 && !isOut(n.id) && Math.abs(n.z) < 0.3 && dist(n.x, n.y, pl.cx, pl.cy) < R);
+  if (cand.length < 6) return false;
+  for (let k = 0; k < 4; k++) {
+    const A = cand[(Math.random() * cand.length) | 0], gd = graphDist(A);
+    const opts = [];
+    for (const B of cand) {
+      if (B === A) continue;
+      const eu = dist(A.x, A.y, B.x, B.y);
+      if (eu < 70 || eu > 200) continue;
+      const ratio = (gd.get(B.id) ?? 5000) / eu;
+      if (ratio > 2.6) opts.push([ratio, B, eu]);
+    }
+    opts.sort((a, b) => b[0] - a[0]);
+    for (const [, B, eu] of opts.slice(0, 4)) {
+      const mx = (A.x + B.x) / 2, my = (A.y + B.y) / 2, bend = (Math.random() - 0.5) * eu * 0.25;
+      const pts = quadPts({ x: A.x, y: A.y }, { x: mx - (B.y - A.y) / eu * bend, y: my + (B.x - A.x) / eu * bend }, { x: B.x, y: B.y });
+      if (!organicOK(pts, null, true)) continue;
+      if (buildRoad(pts.map(p => ({ x: p.x, y: p.y, z: 0 })), PRESETS.street, { node: A.id }, { node: B.id }, true)) { zoneAlong(pts, PRESETS.street); return true; }
+    }
+  }
+  return false;
+}
+// relieve jams like a city engineer would
+function organicTraffic() {
+  const pl = plan();
+  const svcNear = (x, y, r) => { let hit = false; forLotsIn(x - r - 50, y - r - 50, x + r + 50, y + r + 50, l => { if (l.z === ZS && dist(l.x, l.y, x, y) < r + Math.hypot(l.w, l.d) / 2) hit = true; }); return hit; };
+  for (const n of G.nodes.values()) {
+    if (n.edges.length < 3 || n.queue.length < 6 || n.freeway || n.ctl === 'round') continue;
+    const crowded = [...G.nodes.values()].some(o => o !== n && o.edges.length >= 3 && dist(o.x, o.y, n.x, n.y) < (o.ctl === 'round' ? 95 : 45));
+    if (!crowded && !svcNear(n.x, n.y, 34) && (n.ctl === 'lights' || n.edges.length <= 4)) {
+      n.ctl = 'round'; computeNodes();
+      const r = n.r + 10;
+      forLotsIn(n.x - r - 20, n.y - r - 20, n.x + r + 20, n.y + r + 20, l => { if (l.z !== ZS && dist(l.x, l.y, n.x, n.y) < r + Math.max(l.w, l.d) / 2 - 2) removeLot(l, true); });
+      return;
+    }
+    if (n.ctl === 'yield') { n.ctl = 'lights'; computeNodes(); return; }
+  }
+  if (G.month - (pl.upg || 0) < 2) return;
+  for (const e of G.edges.values()) {
+    if (e.S.lanes >= 4 || e.S.noFront || e.S.oneway || e.len < 40) continue;
+    const dens = (laneCount(e, 0) + laneCount(e, 1)) / Math.max(1, e.len / 8);
+    if (dens > 0.7 && !svcNear((e.bb[0] + e.bb[2]) / 2, (e.bb[1] + e.bb[3]) / 2, Math.max(e.bb[2] - e.bb[0], e.bb[3] - e.bb[1]) / 2)) { upgradeEdge(e, PRESETS.avenue, true); pl.upg = G.month; return; }
+  }
+}
+const ORGANIC_SVC = [['fire', 120], ['school', 220], ['police', 380], ['hospital', 650], ['school', 1000], ['stadium', 1300], ['fire', 1700], ['police', 2200], ['hospital', 3000]];
+function organicServices() {
+  const pl = plan(), next = ORGANIC_SVC[pl.svc];
+  if (!next || G.pop < next[1]) return;
+  for (let k = 0; k < 60; k++) {
+    const a = Math.random() * Math.PI * 2, r = 40 + k * 6, x = pl.cx + Math.cos(a) * r, y = pl.cy + Math.sin(a) * r;
+    if (placeService(x, y, next[0], true)) { pl.svc++; return; }
+  }
+}
+function organicConnect() {
+  const pl = plan();
+  if (G.pop < 140 || G.month - pl.conn < 7 || connectedOuts().length >= (G.pop > 1500 ? 4 : 3)) return;
+  pl.conn = G.month;
+  const free = G.outs.filter(o => { const n = G.nodes.get(o.id); return n && !n.edges.length; });
+  if (!free.length) return;
+  free.sort((a, b) => { const A = G.nodes.get(a.id), B = G.nodes.get(b.id); return dist(A.x, A.y, pl.cx, pl.cy) - dist(B.x, B.y, pl.cx, pl.cy); });
+  const out = G.nodes.get(free[0].id);
+  let best = null, bd = 1e9;
+  for (const n of G.nodes.values()) if (n.edges.length && !isOut(n.id) && Math.abs(n.z) < 0.3) { const d = dist(n.x, n.y, out.x, out.y); if (d < bd) { bd = d; best = n; } }
+  if (!best) return;
+  const mx = (best.x + out.x) / 2, my = (best.y + out.y) / 2, len = bd || 1;
+  const pts = quadPts({ x: best.x, y: best.y }, { x: mx + (out.y - best.y) / len * len * 0.1, y: my - (out.x - best.x) / len * len * 0.1 }, { x: out.x, y: out.y });
+  if (buildRoad(pts.map(p => ({ ...p, z: 0 })), PRESETS.avenue, { node: best.id }, { node: out.id }, true)) toast(`${G.name} built an avenue out to ${free[0].name}.`);
+}
+function plannerTick() {
+  const pl = plan();
+  organicTraffic();
+  organicServices();
+  organicConnect();
+  let empty = 0;
+  for (const l of G.lots.values()) if (!l.b && l.z !== ZS) empty++;
+  // a slow commute means the grid needs more ways through, not more cul-de-sacs
+  pl.link = (pl.link || 0) + (G.commute > 1.5 ? 2 : 1);
+  if (pl.link >= 8) { pl.link = 0; if (connectorRoad()) return; }
+  if (empty > 14 + G.pop / 50) return; // let houses catch up before laying more roads
+  // drift the town centre toward where people actually live
+  if (lists.homes && lists.homes.total) {
+    let sx = 0, sy = 0, n = 0;
+    for (const it of lists.homes.items) { sx += it.l.x; sy += it.l.y; n++; }
+    pl.cx = lerp(pl.cx, sx / n, 0.02); pl.cy = lerp(pl.cy, sy / n, 0.02);
+  }
+  const acts = 1 + (G.demand.r > 0.4 ? 1 : 0);
+  for (let a = 0; a < acts; a++) for (let t = 0; t < 4; t++) if (Math.random() < 0.55 ? extendRoad() : branchRoad()) break;
+}
+
 // match days: crowds drive to the stadium, then all leave together
 function stepEvents(dt) {
   if (!G.evNext || G.time < 5) return;
@@ -1936,7 +2153,7 @@ function stepEvents(dt) {
   const t = G.time - ev.t0, crowd = Math.min(5, 1.5 + G.pop / 400);
   if (t > 55) { G.ev = null; G.evNext = G.time + 45 + Math.random() * 25; return; }
   if (t > 25 && t < 32) return; // the match itself
-  ev.acc += dt * crowd;
+  ev.acc += dt * crowd * growDamp();
   while (ev.acc >= 1 && G.cars.length < MAX_CARS) {
     ev.acc--;
     const h = pickW(lists.homes);
@@ -2161,7 +2378,8 @@ function canEnter(n, c) {
     return ins.length < 6 && ins.every(o => n.groups.get(o.app) === n.phase);
   }
   // yield: cars stop briefly, then go together with traffic from the same axis
-  if (G.time - c.qT < 0.35) return false;
+  const major = G.edges.get(app), isMajor = major && (major.S.lanes >= 4 || major.S.speed >= 45);
+  if (!isMajor && G.time - c.qT < 0.35) return false;
   const grp = n.groups.get(app);
   if (!ins.length) return true;
   if (ins.length >= 3 || !ins.every(o => n.groups.get(o.app) === grp)) return false;
@@ -2179,7 +2397,15 @@ function pickNextLane(c) {
   }
   return best;
 }
+function ringPos(cr, t) {
+  const th = cr.a0 - cr.dA * t, base = lerp(cr.ra, cr.rb, t), r = base - Math.sin(Math.PI * t) * Math.max(0, base - cr.ring);
+  return [cr.cx + Math.cos(th) * r, cr.cy + Math.sin(th) * r];
+}
 function bez(cr, t) {
+  if (cr.arc) {
+    const [x, y] = ringPos(cr, t), [x2, y2] = ringPos(cr, Math.min(1, t + 0.01)), [x0, y0] = ringPos(cr, Math.max(0, t - 0.01));
+    return { x, y, dx: x2 - x0, dy: y2 - y0 };
+  }
   const u = 1 - t, a = u * u * u, b = 3 * u * u * t, c = 3 * u * t * t, d = t * t * t;
   const x = a * cr.p0.x + b * cr.p1.x + c * cr.p2.x + d * cr.p3.x, y = a * cr.p0.y + b * cr.p1.y + c * cr.p2.y + d * cr.p3.y;
   const dx = 3 * u * u * (cr.p1.x - cr.p0.x) + 6 * u * t * (cr.p2.x - cr.p1.x) + 3 * t * t * (cr.p3.x - cr.p2.x);
@@ -2197,6 +2423,16 @@ function startCross(c, n, lane) {
   if (A.dx * B.dx + A.dy * B.dy < -0.8) k = Math.max(k, 9);
   const cr = { p0: A, p1: { x: A.x + A.dx * k, y: A.y + A.dy * k }, p2: { x: B.x - B.dx * k, y: B.y - B.dy * k }, p3: B, t: 0, node: n.id, lane };
   cr.len = Math.max(0.3, (D + dist(A.x, A.y, cr.p1.x, cr.p1.y) + dist(cr.p1.x, cr.p1.y, cr.p2.x, cr.p2.y) + dist(cr.p2.x, cr.p2.y, B.x, B.y)) / 2);
+  if (n.ctl === 'round' && n.edges.length > 2) {
+    // circulate around the island, keeping it on the left (right-hand traffic)
+    const a0 = Math.atan2(A.y - n.y, A.x - n.x), a1 = Math.atan2(B.y - n.y, B.x - n.x);
+    let dA = a0 - a1;
+    while (dA < 0) dA += Math.PI * 2;
+    while (dA >= Math.PI * 2) dA -= Math.PI * 2;
+    if (dA < 0.5) dA += Math.PI * 2;
+    Object.assign(cr, { arc: true, cx: n.x, cy: n.y, a0, dA, ra: dist(A.x, A.y, n.x, n.y), rb: dist(B.x, B.y, n.x, n.y), ring: n.r - 3 });
+    cr.len = cr.ring * dA + Math.abs(cr.ra - cr.ring) + Math.abs(cr.rb - cr.ring);
+  }
   const deg = n.edges.length;
   const vt = Math.min(e1.S.speed, e2.S.speed) * (n.ctl === 'round' ? 0.55 : n.ctl === 'lights' ? 0.6 : 0.45);
   c.v = deg <= 2 ? Math.max(c.v, 6) : Math.max(vt, 6);
@@ -2273,7 +2509,16 @@ function stepCars(dt) {
     c.prevLane = c.lane; c.lane = nl; c.lcT = 1;
   }
   for (const n of G.nodes.values()) {
-    if (n.ctl === 'lights') { n.phaseT += dt; if (n.phaseT > 8) { n.phaseT = 0; n.phase ^= 1; } }
+    if (n.ctl === 'lights') {
+      n.phaseT += dt;
+      // actuated signals: cut a green short once nobody is waiting for it but the cross street is
+      if (n.phaseT > 2.5 && n.phaseT < 6.6) {
+        let mine = 0, other = 0;
+        for (const o of n.queue) { if (n.groups.get(o.legs[o.li].e) === n.phase) mine++; else other++; }
+        if (!mine && other) n.phaseT = 6.6;
+      }
+      if (n.phaseT > 8) { n.phaseT = 0; n.phase ^= 1; }
+    }
     if (!n.queue.length) continue;
     for (let k = 0; k < n.queue.length; k++) {
       const c = n.queue[k];
@@ -2308,6 +2553,8 @@ function stepCars(dt) {
 // =====================================================================
 // update loop
 // =====================================================================
+// in a self-growing city people stay home rather than join a jam, so the town can recover on its own
+function growDamp() { return G.mode.play === 'grow' ? clamp((G.flow - 10) / 45, 0.25, 1) : 1; }
 function update(dt) {
   G.time += dt;
   G.growAcc += dt;
@@ -2315,14 +2562,17 @@ function update(dt) {
   G.lvAcc += dt;
   if (G.lvAcc >= 2) { G.lvAcc = 0; computeLV(); }
   if (G.mode.budget === 'unlimited') G.money = 1e9;
-  G.tripAcc += dt * Math.min(14, G.pop / 110) * (TRAFFIC_MULT[G.mode.traffic] || 1);
+  G.tripAcc += dt * Math.min(14, G.pop / 110) * (TRAFFIC_MULT[G.mode.traffic] || 1) * (G.mode.play === 'grow' ? 0.7 * growDamp() : 1);
   while (G.tripAcc >= 1) { G.tripAcc--; if (G.cars.length < MAX_CARS) commuteTrip(); }
-  G.truckAcc += dt * Math.min(3, G.ji / 220);
-  while (G.truckAcc >= 1) { G.truckAcc--; if (G.cars.length < MAX_CARS) truckTrip(); }
+  // background traffic (trucks, through trips) backs off as the roads fill, so residents still get around
+  const bgCap = MAX_CARS * (G.mode.play === 'grow' ? 0.4 : 0.6);
+  G.truckAcc += dt * Math.min(3, G.ji / 220) * (G.mode.play === 'grow' ? 0.6 * growDamp() : 1);
+  while (G.truckAcc >= 1) { G.truckAcc--; if (G.cars.length < bgCap) truckTrip(); }
   stepEvents(dt);
+  if (G.mode.play === 'grow' && G.autoOn !== false) { G.planAcc = (G.planAcc || 0) + dt; if (G.planAcc >= 1.1) { G.planAcc = 0; plannerTick(); } }
   if (connectedOuts().length >= 2) {
-    G.thruAcc += dt * Math.min(3, 0.3 + G.month * 0.012 + G.pop / 2500);
-    while (G.thruAcc >= 1) { G.thruAcc--; if (G.cars.length < MAX_CARS) thruTrip(); }
+    G.thruAcc += dt * Math.min(1.2, 0.2 + G.month * 0.005 + G.pop / 4000) * (G.mode.play === 'grow' ? 0.5 * growDamp() : 1);
+    while (G.thruAcc >= 1) { G.thruAcc--; if (G.cars.length < bgCap) thruTrip(); }
   }
   stepCars(dt);
   G.monthAcc += dt;
@@ -2341,7 +2591,7 @@ function serialize() {
   G.trees.forEach((t, i) => { alive[i] = t.alive ? 1 : 0; });
   return {
     v: 4, slot: G.slot, seed: G.seed, name: G.name, money: G.money, time: G.time, month: G.month, monthAcc: G.monthAcc, net: G.net, milestone: G.milestone,
-    unlocked: G.unlocked, outs: G.outs, mode: G.mode, hist: G.hist, evNext: G.evNext, nextId: G.nextId, commute: G.commute,
+    unlocked: G.unlocked, outs: G.outs, mode: G.mode, hist: G.hist, evNext: G.evNext, plan: G.plan, autoOn: G.autoOn, nextId: G.nextId, commute: G.commute,
     nodes: [...G.nodes.values()].map(n => [n.id, r1(n.x), r1(n.y), n.ctl, r1(n.z)]),
     edges: [...G.edges.values()].map(e => [e.id, e.a, e.b, e.spec, e.pts.flatMap(p => [r1(p.x), r1(p.y), Math.round(p.z * 100) / 100])]),
     lots: [...G.lots.values()].map(l => [r1(l.x), r1(l.y), l.xa.x, l.xa.y, l.ya.x, l.ya.y, r1(l.w), r1(l.d), l.z, l.b ? l.b.level : 0, l.b && l.b.abandoned ? 1 : 0, l.svc || 0]),
@@ -2412,6 +2662,7 @@ function foundCity(seed, mode) {
   for (let k = 0; k <= 20; k++) { const t = k / 20; curve.push({ x: lerp(lerp(0, 160, t), lerp(160, 320, t), t), y: lerp(lerp(hy, cy, t), lerp(cy, hy, t), t) }); }
   buildRoad(curve, { ...PRESETS.freeway, f: 2, b: 2 }, { node: out.id }, null, true);
   buildRoad([{ x: 320, y: hy - 110 }, { x: 320, y: hy + 110 }], PRESETS.street, null, null, true);
+  if (G.mode.play === 'grow') seedOrganic();
   for (const e of G.edges.values()) e.born = -99;
   finishBoot();
 }
@@ -2428,7 +2679,7 @@ function finishBoot() {
 function loadCity(d) {
   G = newCity(d.seed, d.mode);
   genTerrain(G);
-  Object.assign(G, { evNext: d.evNext || 0, hist: d.hist || [], slot: d.slot, name: d.name, money: d.money, time: d.time, month: d.month, monthAcc: d.monthAcc, net: d.net, milestone: d.milestone, unlocked: d.unlocked || {}, commute: d.commute || 1 });
+  Object.assign(G, { plan: d.plan || null, autoOn: d.autoOn !== false, evNext: d.evNext || 0, hist: d.hist || [], slot: d.slot, name: d.name, money: d.money, time: d.time, month: d.month, monthAcc: d.monthAcc, net: d.net, milestone: d.milestone, unlocked: d.unlocked || {}, commute: d.commute || 1 });
   G.zone.set(fromB64(d.zone));
   const alive = fromB64(d.trees);
   G.trees.forEach((t, i) => { t.alive = alive[i] !== 0; });
@@ -3226,14 +3477,14 @@ function drawParticles() {
   }
 }
 function drawBadges(lots) {
-  const R = Math.max(2.6, 6 / cam.z);
+  const R = Math.max(2.6, 6 / cam.z), slack = G.mode.play === 'grow' ? 0.6 : 0; // grow-mode residents are more patient
   for (const l of lots) {
     const b = l.b;
     if (!b || l.z !== ZR || b.born > G.time - 2) continue;
     let col = null;
     if (b.abandoned || b.noRoute > 4 || !l.attach) col = '#8a8a8a';
-    else if (b.happy > 2.4) col = '#ef4f45';
-    else if (b.happy > 1.8) col = '#f2b33c';
+    else if (b.happy > 2.4 + slack) col = '#ef4f45';
+    else if (b.happy > 1.8 + slack) col = '#f2b33c';
     if (!col) continue;
     const bob = Math.sin(clock * 3 + l.seed) * R * 0.15, y = l.y - R * 0.6 + bob;
     ctx.fillStyle = col; ctx.beginPath(); ctx.arc(l.x, y, R, 0, 7); ctx.fill();
@@ -3939,8 +4190,10 @@ function begin(fn) {
   $('intro').hidden = true;
   state = 'play';
   $('cityName').value = G.name;
-  setTool('road');
-  toast('Draw streets off the highway, then paint homes beside them.');
+  $('btnAuto').hidden = G.mode.play !== 'grow';
+  syncAuto();
+  setTool(G.mode.play === 'grow' ? 'inspect' : 'road');
+  toast(G.mode.play === 'grow' ? 'This city grows by itself. Speed up time and watch, or build alongside it.' : 'Draw streets off the highway, then paint homes beside them.');
 }
 // ---------- stats panel: one small line chart per measure ----------
 let statsOpen = false, statsRange = 12, statsTable = false;
@@ -4028,6 +4281,8 @@ function drawStats() {
 }
 function setRange(v) { statsRange = v; for (const b of document.querySelectorAll('[data-range]')) b.classList.toggle('on', +b.dataset.range === v); drawStats(); }
 for (const b of document.querySelectorAll('[data-range]')) b.addEventListener('click', () => setRange(+b.dataset.range));
+function syncAuto() { const on = G && G.autoOn !== false; $('btnAuto').textContent = on ? 'Growing' : 'Growth paused'; $('btnAuto').classList.toggle('on', on); }
+$('btnAuto').addEventListener('click', () => { G.autoOn = G.autoOn === false; syncAuto(); toast(G.autoOn ? 'The city is growing by itself again.' : 'Growth paused. You can build by hand meanwhile.'); });
 $('btnStats').addEventListener('click', () => { statsOpen = !statsOpen; $('stats').hidden = !statsOpen; $('btnStats').classList.toggle('on', statsOpen); if (statsOpen) { $('statBody').innerHTML = ''; drawStats(); } });
 $('btnCloseStats').addEventListener('click', () => { statsOpen = false; $('stats').hidden = true; $('btnStats').classList.remove('on'); });
 $('btnStatTable').addEventListener('click', () => { statsTable = !statsTable; $('btnStatTable').setAttribute('aria-pressed', statsTable); $('btnStatTable').classList.toggle('on', statsTable); $('statBody').innerHTML = ''; drawStats(); });
@@ -4041,6 +4296,7 @@ function freshName() {
 }
 const newMode = { ...DEFAULT_MODE };
 const MODE_OPTS = [
+  ['play', 'Play', [['build', 'Build it yourself', ''], ['grow', 'Grows by itself', 'watch it grow']]],
   ['budget', 'Budget', [['tight', 'Tight', '$10k'], ['normal', 'Normal', '$25k'], ['rich', 'Rich', '$100k'], ['unlimited', 'Unlimited', 'sandbox']]],
   ['traffic', 'Traffic', [['light', 'Light', 'no one leaves'], ['normal', 'Normal', ''], ['rush', 'Rush hour', '×1.5 cars']]],
   ['land', 'Land', [['valley', 'River valley', ''], ['lakes', 'Lakes', ''], ['plains', 'Plains', 'no water']]],
