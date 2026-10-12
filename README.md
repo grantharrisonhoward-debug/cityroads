@@ -68,14 +68,26 @@ When founding a city, pick:
 
 ## Grows by itself
 
-In this mode the town plans itself while you watch. It starts as a boulevard and a few streets, then:
-- Lays new curving streets and side branches as homes fill up, zoning them by distance from the
-  centre and by what the town needs (homes, shops, industry, parks and car parks).
-- Closes loops by linking streets that are close on the map but far apart by road.
-- Fixes jams: yield junctions become lights, busy junctions become roundabouts, and crowded streets
-  are widened into avenues.
-- Builds a fire station, school, police station, hospital and stadium as the population passes each
-  milestone, and links new region connections as it grows.
+In this mode the town plans itself while you watch, the way real cities grow:
+- **An avenue grid.** A gently curving grid of avenues spreads out from the highway, with two
+  boulevards crossing at a grand roundabout in the centre. Where avenues meet, the town builds
+  roundabouts or traffic lights.
+- **Neighbourhoods fill in one at a time.** Each space between avenues gets its own street pattern:
+  - a tight grid of small blocks downtown, with shops along the boulevards
+  - regular residential grids
+  - long curving crescents in the suburbs
+  - big plots in industrial districts that cluster away from the centre
+- **Parks where they make sense.** There's a large central park (by a lake when there's one
+  nearby), green promenades along the river and lake shores, and a pocket park in most
+  neighbourhoods.
+- **Public buildings** get a block of their own as the town passes each milestone: fire station,
+  school, police, hospital, and a stadium with its own car park.
+- **Traffic upgrades.** Busy junctions become lights or roundabouts, and jammed avenues are widened
+  to three lanes each way. Once traffic gets bad, the town runs elevated freeways over its busiest
+  avenues. Each freeway has ramps down to the cross avenues and climbs over bridges and other
+  freeways.
+- **Rezoning.** Shop lots nobody wants for a long time are rezoned for homes.
+- **Bridges.** Avenues cross rivers on bridges, and the town only expands where it can connect.
 
 When the roads fill up, people make fewer trips, so the town recovers instead of gridlocking. The
 **Growing** button in the top bar pauses or resumes the planner, and every tool still works if you

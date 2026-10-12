@@ -1092,6 +1092,7 @@ function lotFits(l) {
 }
 function addLot(l) {
   l.id = G.nextId++;
+  l.t0 = G.time;
   l.seed = (hash(Math.round(l.x * 3), Math.round(l.y * 3), G.seed) * 1e9) | 0;
   l.b = null;
   G.lots.set(l.id, l);
@@ -1774,8 +1775,10 @@ function census() {
   const work = jc + ji;
   const jam = G.mode.play === 'grow' ? clamp((G.commute - 2) * 0.4, 0, 0.6) : clamp((G.commute - 1.5) * 0.8, 0, 1.3);
   G.demand.r = clamp(Math.min(0.35, svcR) + clamp((work + outJobs() - pop * 0.5) / Math.max(30, pop * 0.25), -1, 1) - jam, -1, 1);
+  // a self-growing city keeps enough work in town for everyone, so it never stalls waiting on outside jobs
+  const gi = G.mode.play === 'grow' ? 0.27 : 0.22;
   G.demand.c = clamp(clamp((pop * 0.16 - jc + 4) / Math.max(12, pop * 0.07), -1, 1) - jam * 0.5, -1, 1);
-  G.demand.i = clamp(clamp((pop * 0.22 - ji + 12) / Math.max(15, pop * 0.1), -1, 1) - jam * 0.3, -1, 1);
+  G.demand.i = clamp(clamp((pop * gi - ji + 12) / Math.max(15, pop * 0.1), -1, 1) - jam * 0.3, -1, 1);
 }
 let parkGrid = null;
 function parkAt(x, y) {
@@ -1920,162 +1923,445 @@ function endOfMonth() {
   if (G.month % 3 === 0) save(false);
 }
 // =====================================================================
-// organic growth: a planner that lays roads and zones by itself
+// organic growth: the town lays itself out the way real cities do.
+// A gently warped lattice of avenues (with two main boulevards crossing at
+// the centre) is extended one superblock at a time. Each superblock then gets
+// its own local streets — a tight grid downtown, curving crescents in the
+// suburbs, big plots for industry — and is zoned block by block. Parks go by
+// the water, in pocket blocks and in one big central park. Once traffic
+// builds up, elevated freeways are run over the busiest avenues, with ramps
+// down to the cross avenues.
 // =====================================================================
+const SB_A = 210;
+const FW_SPEC = { f: 2, b: 2, med: 'barrier', kmh: 100, front: false };
+const RAMP2 = { f: 1, b: 1, med: 'none', kmh: 60, front: false };
+const BIG_AVE = { f: 3, b: 3, med: 'grass', kmh: 60, front: true };
+const HOME_ST = { f: 1, b: 1, med: 'none', kmh: 40, front: true, lw: 3.8 }; // quiet residential street, no markings
+const ORGANIC_SVC = [['fire', 120], ['school', 220], ['police', 380], ['hospital', 650], ['school', 1000], ['stadium', 1300], ['fire', 1700], ['police', 2200], ['hospital', 3000], ['school', 3600]];
+const PU = i => i * SB_A + (i ? (hash(i, 11, G.seed) - 0.5) * 44 : 0);
+const PV = j => j * SB_A + (j ? (hash(j, 13, G.seed) - 0.5) * 44 : 0);
+// the plan's own coordinates (u east-ish, v south-ish) mapped onto the map with a slow, smooth warp
+function W(u, v) {
+  const pl = G.plan, c = Math.cos(pl.th), s = Math.sin(pl.th);
+  const wx = (vnoise(u * 0.0021 + 3.1, v * 0.0021 + 0.7, G.seed + 301) - 0.5) * 80;
+  const wy = (vnoise(u * 0.0021 + 9.4, v * 0.0021 + 5.3, G.seed + 302) - 0.5) * 80;
+  return { x: pl.ox + u * c - v * s + wx, y: pl.oy + u * s + v * c + wy };
+}
+const lineAt = (kind, k, t) => kind === 'u' ? W(PU(k), t) : W(t, PV(k));
+const cornerT = (kind, c) => kind === 'u' ? PV(c) : PU(c);
+const sbKey = (i, j) => i + ',' + j;
+const sbDist = (i, j) => Math.max(Math.abs(i - 0.5), Math.abs(j + 0.5)) - 0.5;
 function plan() {
-  if (!G.plan) { const n = [...G.nodes.values()].find(q => q.edges.length >= 3) || { x: 320, y: G.hy }; G.plan = { cx: n.x, cy: n.y, svc: 0, conn: 0, dead: [] }; }
+  if (!G.plan || !G.plan.v2) newPlan();
   return G.plan;
 }
-function seedOrganic() {
-  const pl = plan(), hy = G.hy;
-  const blvd = PRESETS.boulevard;
-  buildRoad(quadPts({ x: 320, y: hy }, { x: 390, y: hy + 6 }, { x: 460, y: hy - 4 }), blvd, null, null, true);
-  zoneAlong(quadPts({ x: 320, y: hy }, { x: 390, y: hy + 6 }, { x: 460, y: hy - 4 }), blvd);
-  zoneAlong([{ x: 320, y: hy - 110 }, { x: 320, y: hy + 110 }], PRESETS.street);
-  pl.cx = 380; pl.cy = hy;
-}
-// what to paint at a spot: a shopping core, homes around it, industry in a few outer pockets
-function organicZone(x, y) {
-  const pl = plan(), d = dist(x, y, pl.cx, pl.cy), n = vnoise(x * 0.004, y * 0.004, G.seed + 90);
-  const core = 80 + Math.sqrt(G.pop) * 4;
-  // each zone scores for suiting the spot plus how much the city wants it right now
-  const sR = (d < core ? 0.3 : 1) + G.demand.r;
-  const sC = (d < core ? 1.3 : 0.15) + G.demand.c * 1.3 + (n > 0.55 ? 0.3 : 0);
-  const sI = (d > 170 ? (n < 0.4 ? 1.1 : 0.2) : -2) + G.demand.i * 1.3;
-  const j = hash(Math.round(x), Math.round(y), G.seed + 8) * 0.25;
-  return sC + j > sR && sC >= sI ? ZC : sI + j > sR ? ZI : ZR;
-}
-function zoneAlong(pts, spec) {
-  const S = specOf(spec), L = polyLen(pts), sm = resample(pts, 6);
-  const mid = sm[Math.floor(sm.length / 2)];
-  const zs = [organicZone(mid.x + 30, mid.y + 30), organicZone(mid.x - 30, mid.y - 30)];
-  for (let i = 1; i < sm.length - 1; i += 2) {
-    const a = sm[i - 1], b = sm[i + 1], l = dist(a.x, a.y, b.x, b.y) || 1, nx = -(b.y - a.y) / l, ny = (b.x - a.x) / l;
-    [1, -1].forEach((side, k) => {
-      for (const [off, r] of [[S.w / 2 + 16, 18], [S.w / 2 + 34, 20]]) {
-        const x = sm[i].x + nx * side * off, y = sm[i].y + ny * side * off;
-        if (!waterNear(x, y, 6)) paintCircle(x, y, r, zs[k], true);
-      }
-    });
+function newPlan() {
+  const rnd = mulberry(G.seed + 515), old = G.plan;
+  const pl = { v2: true, th: (rnd() - 0.5) * 0.3, ox: 0, oy: 0, sb: {}, seg: { 'v0_-1': 2 }, svc: old ? old.svc || 0 : 0, conn: old ? old.conn || 0 : 0, fw: [], upg: 0, cur: null };
+  G.plan = pl;
+  const w0 = W(0, 0);
+  pl.ox = 320 - w0.x; pl.oy = G.hy - w0.y;
+  const c = W(PU(1), PV(0));
+  pl.cx = c.x; pl.cy = c.y;
+  // a big park a superblock or two from the centre, by the water if there is some
+  let best = null, bs = -1e9;
+  for (let i = -1; i <= 3; i++) for (let j = -2; j <= 1; j++) {
+    const d = sbDist(i, j);
+    if (d < 1 || d > 2 || !sbValid(i, j)) continue;
+    const wf = sbWater(i, j), s = (wf > 0.03 && wf < 0.45 ? 2 : 0) - d + hash(i, j, G.seed + 41);
+    if (s > bs) { bs = s; best = [i, j]; }
   }
-  // the odd pocket park or car park
-  const r = hash(Math.round(mid.x), Math.round(mid.y), G.seed + 3);
-  if (L > 50 && r < 0.09) paintCircle(mid.x + 34, mid.y + 34, 30, ZP, true);
-  else if (L > 50 && r > 0.95 && zs[0] === ZC) paintCircle(mid.x - 30, mid.y + 30, 18, ZK, true);
+  pl.parkSB = best;
+  // an older self-built town keeps what it has: superblocks with roads in them count as done
+  if (old) for (let i = -3; i <= 9; i++) for (let j = -5; j <= 5; j++) {
+    const lay = { u0: PU(i), u1: PU(i + 1), v0: PV(j), v1: PV(j + 1) };
+    let hit = false;
+    for (let a = 1; a < 4 && !hit; a++) for (let b = 1; b < 4 && !hit; b++) {
+      const p = W(lerp(lay.u0, lay.u1, a / 4), lerp(lay.v0, lay.v1, b / 4));
+      if (nearestRoad(p.x, p.y, 30, e => !e.S.noFront)) hit = true;
+    }
+    if (hit) pl.sb[sbKey(i, j)] = { st: 3, style: 'old' };
+  }
+  return pl;
+}
+function sbCorners(i, j) { return [W(PU(i), PV(j)), W(PU(i + 1), PV(j)), W(PU(i + 1), PV(j + 1)), W(PU(i), PV(j + 1))]; }
+function sbWater(i, j) {
+  let n = 0;
+  for (let a = 0; a < 7; a++) for (let b = 0; b < 7; b++) { const p = W(lerp(PU(i), PU(i + 1), (a + 0.5) / 7), lerp(PV(j), PV(j + 1), (b + 0.5) / 7)); if (waterAt(p.x, p.y)) n++; }
+  return n / 49;
+}
+function sbValid(i, j) {
+  if (sbCorners(i, j).some(p => p.x < 40 || p.y < 40 || p.x > WW - 40 || p.y > WH - 40)) return false;
+  return sbWater(i, j) < 0.6;
+}
+function nodeNear(p, r) {
+  let best = null, bd = r;
+  for (const n of G.nodes.values()) { const d = dist(n.x, n.y, p.x, p.y); if (d < bd && Math.abs(n.z) < 0.3) { bd = d; best = n; } }
+  return best;
+}
+function svcInWay(pts, m) {
+  for (const p of pts) {
+    let hit = false;
+    forLotsIn(p.x - 60, p.y - 60, p.x + 60, p.y + 60, l => { if (l.z === ZS && pointInLot(l, p.x, p.y, m)) hit = true; });
+    if (hit) return true;
+  }
+  return false;
+}
+// lift a road over water and ground-level freeways; false when a crossing sits too close to an end
+const smooth = t => t * t * (3 - 2 * t);
+function bridgeProfile(pts) {
+  const cum = [0];
+  for (let i = 1; i < pts.length; i++) cum.push(cum[i - 1] + dist(pts[i - 1].x, pts[i - 1].y, pts[i].x, pts[i].y));
+  const L = cum[cum.length - 1], runs = [];
+  let a = null;
+  pts.forEach((p, i) => {
+    const wet = waterNear(p.x, p.y, 4) || (cum[i] > 25 && cum[i] < L - 25 && !!nearestRoad(p.x, p.y, 14, (e, k) => e.S.noFront && e.pts[k].z < 0.5));
+    if (wet && a === null) a = cum[i];
+    if (!wet && a !== null) { runs.push([a, cum[i]]); a = null; }
+  });
+  if (a !== null) runs.push([a, L]);
+  if (!runs.length) return true;
+  if (runs.reduce((t, r) => t + r[1] - r[0], 0) > 190) return false;
+  for (const [a0, a1] of runs) if (a0 < 52 || a1 > L - 52) return false;
+  pts.forEach((p, i) => {
+    let z = 0;
+    for (const [a0, a1] of runs) { const s = cum[i], d = s < a0 - 10 ? a0 - 10 - s : s > a1 + 10 ? s - a1 - 10 : 0; z = Math.max(z, 1 - smooth(clamp(d / 40, 0, 1))); }
+    p.z = z;
+  });
+  return true;
+}
+function arterialPts(kind, k, idx) {
+  const t0 = cornerT(kind, idx), t1 = cornerT(kind, idx + 1), n = Math.ceil(Math.abs(t1 - t0) / 6), pts = [];
+  for (let q = 0; q <= n; q++) { const p = lineAt(kind, k, lerp(t0, t1, q / n)); pts.push({ x: p.x, y: p.y, z: 0 }); }
+  if (pts.some(p => p.x < 25 || p.y < 25 || p.x > WW - 25 || p.y > WH - 25) || !bridgeProfile(pts) || svcInWay(pts, 12)) return null;
+  return pts;
+}
+// a new superblock must be reachable: one of its avenues is already built, or can be built from a corner already on the network
+function sbReachable(i, j) {
+  const pl = G.plan, sides = [['v', j, i, [i, j], [i + 1, j]], ['v', j + 1, i, [i, j + 1], [i + 1, j + 1]], ['u', i, j, [i, j], [i, j + 1]], ['u', i + 1, j, [i + 1, j], [i + 1, j + 1]]];
+  for (const [kind, k, idx, ca, cb] of sides) {
+    const st = pl.seg[kind + k + '_' + idx];
+    if (st > 0) return true;
+    if (st < 0) continue;
+    const onNet = c => { const n = nodeNear(W(PU(c[0]), PV(c[1])), 6); return n && n.edges.length > 0; };
+    if ((onNet(ca) || onNet(cb)) && arterialPts(kind, k, idx)) return true;
+  }
+  return false;
+}
+function buildArterial(kind, k, idx) {
+  const pl = G.plan, key = kind + k + '_' + idx;
+  if (pl.seg[key]) return pl.seg[key] > 0;
+  const pts = arterialPts(kind, k, idx);
+  if (!pts) { pl.seg[key] = -1; return false; }
+  const main = (kind === 'v' && k === 0) || (kind === 'u' && k === 1);
+  if (!buildRoad(pts, main ? PRESETS.boulevard : PRESETS.avenue, null, null, true)) { pl.seg[key] = -1; return false; }
+  pl.seg[key] = 1;
+  return true;
+}
+// where two avenues meet: a grand roundabout at the centre, a mix of lights and roundabouts downtown, roundabouts further out
+function setCorner(i, j) {
+  const n = nodeNear(W(PU(i), PV(j)), 6);
+  if (!n || n.edges.length < 3 || n.ctl !== 'yield' || n.freeway) return;
+  const d = Math.max(Math.abs(i - 1), Math.abs(j));
+  n.ctl = d === 0 || d > 1 || hash(i, j, G.seed + 77) < 0.5 ? 'round' : 'lights';
+  computeNodes();
+  if (n.ctl === 'round') {
+    const r = n.r + 10;
+    forLotsIn(n.x - r - 20, n.y - r - 20, n.x + r + 20, n.y + r + 20, l => { if (l.z !== ZS && dist(l.x, l.y, n.x, n.y) < r + Math.max(l.w, l.d) / 2 - 2) removeLot(l, true); });
+  }
+}
+// ---------- superblock layouts ----------
+function sbStyle(i, j) {
+  // industry gathers in a district or two away from the centre, picked by pickSuperblock
+  const pl = G.plan, d = sbDist(i, j), h = hash(i, j, G.seed + 404);
+  if (pl.parkSB && pl.parkSB[0] === i && pl.parkSB[1] === j) return 'park';
+  if (pl.wantStadium && d >= 1 && sbWater(i, j) < 0.05) { pl.wantStadium = false; return 'stadium'; }
+  if (d === 0) return 'core';
+  if (pl.want === 'ind' && d >= 1) return 'ind';
+  if (d === 1) return h < 0.75 ? 'grid' : 'suburb';
+  return d >= 3 || h < 0.55 ? 'suburb' : 'grid';
+}
+function splitAt(a, b, n, salt) {
+  const out = [];
+  for (let q = 1; q < n; q++) out.push(a + (b - a) * q / n + (hash(q, salt, G.seed + 19) - 0.5) * 8);
+  return out;
+}
+function sbLayout(i, j, style) {
+  const u0 = PU(i), u1 = PU(i + 1), v0 = PV(j), v1 = PV(j + 1), h = hash(i, j, G.seed + 7), h2 = hash(j, i, G.seed + 8);
+  const lay = { u0, u1, v0, v1, lu: [], lv: [], wave: null };
+  const both = (nu, nv) => { lay.lu = splitAt(u0, u1, nu, i * 7 + 1); lay.lv = splitAt(v0, v1, nv, j * 7 + 2); };
+  if (style === 'core') both(3, 3 + (h < 0.4 ? 1 : 0));
+  else if (style === 'grid') both(3 - (h < 0.2 ? 1 : 0), 3);
+  else if (style === 'ind') both(2, 2);
+  else if (style === 'stadium') both(2, 1);
+  else if (style === 'suburb') {
+    // long crescents one way, maybe one straight street across the middle
+    const along = h < 0.5 ? 'u' : 'v', cross = h2 < 0.65;
+    if (along === 'u') { lay.lu = splitAt(u0, u1, 4, i * 7 + 3); lay.lv = cross ? splitAt(v0, v1, 2, j * 7 + 4) : []; }
+    else { lay.lv = splitAt(v0, v1, 4, j * 7 + 5); lay.lu = cross ? splitAt(u0, u1, 2, i * 7 + 6) : []; }
+    lay.wave = { axis: along, amp: (h2 < 0.5 ? 1 : -1) * (14 + hash(i, j, G.seed + 9) * 10) };
+  }
+  lay.bu = [u0, ...lay.lu, u1]; lay.bv = [v0, ...lay.lv, v1];
+  return lay;
+}
+// position inside a superblock, bent by its crescent wave (zero along the avenues)
+function sbP(lay, u, v) {
+  const w = lay.wave;
+  if (w) {
+    const su = Math.sin(Math.PI * clamp((u - lay.u0) / (lay.u1 - lay.u0), 0, 1)), sv = Math.sin(Math.PI * clamp((v - lay.v0) / (lay.v1 - lay.v0), 0, 1));
+    if (w.axis === 'u') u += w.amp * su * sv; else v += w.amp * su * sv;
+  }
+  return W(u, v);
+}
+function buildLocal(pts, spec) {
+  // stop short of water and ground-level freeways; leftover stubs become dead ends
+  const ok = p => p.x > 20 && p.y > 20 && p.x < WW - 20 && p.y < WH - 20 && !waterNear(p.x, p.y, 9) && !nearestRoad(p.x, p.y, 20, (e, k) => e.S.noFront && e.pts[k].z < 0.5);
+  let run = [];
+  const flush = () => {
+    if (run.length > 1 && polyLen(run) >= 28 && !svcInWay(run, 6)) buildRoad(run.map(p => ({ x: p.x, y: p.y, z: 0 })), spec, null, null, true);
+    run = [];
+  };
+  for (const p of pts) { if (ok(p)) run.push(p); else flush(); }
+  flush();
+}
+function buildLocals(lay, style) {
+  const spec = style === 'core' || style === 'ind' || style === 'stadium' ? PRESETS.street : HOME_ST;
+  for (const u of lay.lu) { const pts = []; for (let v = lay.v0; ; v = Math.min(lay.v1, v + 6)) { pts.push(sbP(lay, u, v)); if (v >= lay.v1) break; } buildLocal(pts, spec); }
+  for (const v of lay.lv) { const pts = []; for (let u = lay.u0; ; u = Math.min(lay.u1, u + 6)) { pts.push(sbP(lay, u, v)); if (u >= lay.u1) break; } buildLocal(pts, spec); }
+}
+function paintBlock(lay, ua, ub, va, vb, z, t0) {
+  const cu = (ua + ub) / 2, cv = (va + vb) / 2, seen = new Set();
+  let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+  for (let u = ua + 1; u < ub; u += 4) for (let v = va + 1; v < vb; v += 4) {
+    const p = sbP(lay, u, v), c = cellOf(p.x, p.y);
+    if (c < 0 || seen.has(c)) continue;
+    seen.add(c);
+    if (water[c] || G.zone[c] === z || G.zone[c] === ZS) continue;
+    if (G.zone[c]) bakeTimer = 0;
+    if (G.zone[c] >= ZP || z >= ZP) parksDirty = true;
+    G.zone[c] = z;
+    G.zoneT[c] = clock + t0 + dist(u, v, cu, cv) * 0.004;
+    if (!animFlag[c]) { animFlag[c] = 1; animCells.push(c); }
+    x0 = Math.min(x0, p.x); y0 = Math.min(y0, p.y); x1 = Math.max(x1, p.x); y1 = Math.max(y1, p.y);
+  }
+  if (x1 < x0) return;
+  if (z >= ZP) fellTrees((tx, ty) => zoneAt(tx, ty) === z, x0, y0, x1, y1);
+  markZoneChange(x0, y0, x1, y1);
+}
+function blockWater(lay, ua, ub, va, vb) {
+  let n = 0;
+  for (let a = 0; a < 4; a++) for (let b = 0; b < 4; b++) { const p = sbP(lay, lerp(ua, ub, (a + 0.5) / 4), lerp(va, vb, (b + 0.5) / 4)); if (waterNear(p.x, p.y, 6)) n++; }
+  return n / 16;
+}
+function zoneSuperblock(i, j, sb) {
+  const pl = G.plan, lay = sb.lay, us = lay.bu, vs = lay.bv, nA = us.length - 1, nB = vs.length - 1, st = sb.style;
+  const H = (a, b, s) => hash(i * 31 + a, j * 37 + b, G.seed + s);
+  const cB = clamp(G.demand.c, -0.5, 0.6), jobsShort = G.jc + G.ji < G.pop * 0.45;
+  // one pocket park per neighbourhood, and a block set aside for the next public building if one is due
+  const pick = s => [Math.min(nA - 1, (H(0, 0, s) * nA) | 0), Math.min(nB - 1, (H(1, 1, s) * nB) | 0)];
+  const parkB = { core: 0.35, grid: 0.55, suburb: 0.5 }[st] > H(2, 2, 5) && nA * nB > 4 ? pick(6) : null;
+  const due = ORGANIC_SVC[pl.svc];
+  let svcB = null;
+  if (due && due[0] !== 'stadium' && G.pop >= due[1] && (st === 'core' || st === 'grid' || st === 'suburb') && nA * nB >= 4) {
+    svcB = pick(11);
+    if (parkB && svcB[0] === parkB[0] && svcB[1] === parkB[1]) svcB = [(svcB[0] + 1) % nA, svcB[1]];
+  }
+  const svcList = [];
+  let k = 0;
+  for (let a = 0; a < nA; a++) for (let b = 0; b < nB; b++) {
+    const ua = us[a], ub = us[a + 1], va = vs[b], vb = vs[b + 1], t0 = (k++) * 0.07;
+    const edge = a === 0 || a === nA - 1 || b === 0 || b === nB - 1;
+    const main = (b === 0 && j === 0) || (b === nB - 1 && j === -1) || (a === 0 && i === 1) || (a === nA - 1 && i === 0);
+    const h = H(a, b, 3);
+    let z = ZR;
+    if (blockWater(lay, ua, ub, va, vb) > 0.12) z = ZP; // waterfront promenade
+    else if (st === 'park') z = ZP;
+    else if (st === 'stadium') {
+      if (a === 0) { svcList.push(['stadium', ua, ub, va, vb]); continue; }
+      paintBlock(lay, ua, ub, va, (va + vb) / 2, ZK, t0); paintBlock(lay, ua, ub, (va + vb) / 2, vb, ZP, t0 + 0.1); continue;
+    }
+    else if (svcB && a === svcB[0] && b === svcB[1]) { svcList.push([due[0], ua, ub, va, vb]); continue; }
+    else if (parkB && a === parkB[0] && b === parkB[1]) z = ZP;
+    else if (st === 'ind') z = main ? ZC : ZI;
+    else if (st === 'core') z = (main && h < 0.65 + cB * 0.5) || (edge && h < 0.15 + cB * 0.4) ? ZC : !edge && h < 0.1 ? ZK : ZR;
+    else if (st === 'grid') z = (main && h < 0.5 + cB * 0.5) || (edge && h < 0.1 + cB * 0.4 + (jobsShort ? 0.1 : 0)) ? ZC : ZR;
+    else if (st === 'suburb') {
+      // a little row of shops on the corner nearest town
+      const near = (a === (i >= 1 ? 0 : nA - 1)) && (b === (j >= 0 ? 0 : nB - 1));
+      z = near && h < 0.6 + cB * 0.3 ? ZC : ZR;
+    }
+    paintBlock(lay, ua, ub, va, vb, z, t0);
+  }
   flushZoneChanges();
-}
-// a proposed road must stay on the map, keep its distance from other roads and only cross water briefly
-function organicOK(pts, ownEdge, allowEnd) {
-  let water = 0;
-  const L = polyLen(pts), sm = resample(pts, 5);
-  for (let i = 0; i < sm.length; i++) {
-    const p = sm[i], s = i * (L / Math.max(1, sm.length - 1));
-    if (p.x < 30 || p.y < 30 || p.x > WW - 30 || p.y > WH - 30) return false;
-    if (waterAt(p.x, p.y)) water += 5;
-    if (s < 14 || (allowEnd && s > L - 22)) continue;
-    if (nearestRoad(p.x, p.y, 21, e => e !== ownEdge)) return false;
-    let blocked = false;
-    forLotsIn(p.x - 60, p.y - 60, p.x + 60, p.y + 60, l => { if (l.z === ZS && pointInLot(l, p.x, p.y, 12)) blocked = true; });
-    if (blocked) return false;
+  for (const [type, ua, ub, va, vb] of svcList) {
+    let done = false;
+    for (const [fa, fb] of [[0.5, 0.5], [0.3, 0.5], [0.7, 0.5], [0.5, 0.3], [0.5, 0.7]]) {
+      const p = sbP(lay, lerp(ua, ub, fa), lerp(va, vb, fb));
+      if (placeService(p.x, p.y, type, true)) { done = true; break; }
+    }
+    if (done || type === 'stadium') pl.svc++;
+    else paintBlock(lay, ua + 1, ub - 1, va + 1, vb - 1, ZP, 0);
   }
-  return water === 0 || (water <= 70 && G.pop > 200);
+  if (svcList.length) flushZoneChanges();
+  if (st === 'park') toast(`${G.name} laid out a new park.`);
 }
-function tryRoad(start, dir, len, spec, ownEdge) {
-  const ang = Math.atan2(dir.y, dir.x) + (Math.random() - 0.5) * 0.5;
-  let end = { x: start.x + Math.cos(ang) * len, y: start.y + Math.sin(ang) * len };
-  // join a nearby road instead of stopping just short of it, so blocks close up
-  const near = nearestRoad(end.x, end.y, 26, (e, i) => e !== ownEdge && Math.abs(e.pts[i].z) < 0.3);
-  let snapB = null;
-  if (near) { end = { x: near.x, y: near.y }; }
-  else {
-    for (const n of G.nodes.values()) if (n.edges.length && dist(n.x, n.y, end.x, end.y) < 26 && Math.abs(n.z) < 0.3) { end = { x: n.x, y: n.y }; snapB = { node: n.id }; break; }
-  }
-  const mx = (start.x + end.x) / 2, my = (start.y + end.y) / 2, px = -(end.y - start.y) / len, py = (end.x - start.x) / len;
-  const bend = (Math.random() - 0.5) * len * 0.35;
-  const pts = quadPts(start, { x: mx + px * bend, y: my + py * bend }, end);
-  if (!organicOK(pts, ownEdge, !!(near || snapB))) return false;
-  const ok = buildRoad(pts.map(p => ({ x: p.x, y: p.y, z: 0 })), spec, start.node ? { node: start.node } : null, snapB, true);
-  if (ok) zoneAlong(pts, spec);
-  return ok;
-}
-function extendRoad() {
-  const pl = plan(), R = 260 + Math.sqrt(G.pop) * 14;
-  const ends = [...G.nodes.values()].filter(n => n.edges.length === 1 && !isOut(n.id) && !pl.dead.includes(n.id) && Math.abs(n.z) < 0.3 && dist(n.x, n.y, pl.cx, pl.cy) < R);
-  if (!ends.length) return false;
-  ends.sort((a, b) => dist(a.x, a.y, pl.cx, pl.cy) - dist(b.x, b.y, pl.cx, pl.cy) + (Math.random() - 0.5) * 160);
-  const n = ends[0], e = G.edges.get(n.edges[0]);
-  if (!e || e.S.freeway) { pl.dead.push(n.id); return false; }
-  const f = n.id === e.b ? pointAt(e, e.len) : pointAt(e, 0), sgn = n.id === e.b ? 1 : -1;
-  const spec = e.S.auto || e.S.lanes >= 4 && Math.random() < 0.5 ? PRESETS.street : Math.random() < 0.8 ? e.spec : PRESETS.street;
-  for (let k = 0; k < 3; k++) if (tryRoad({ x: n.x, y: n.y, node: n.id }, { x: f.tx * sgn, y: f.ty * sgn }, 45 + Math.random() * 45, spec, e)) return true;
-  pl.dead.push(n.id);
-  if (pl.dead.length > 400) pl.dead.splice(0, 200);
-  return false;
-}
-function branchRoad() {
-  const pl = plan(), R = 240 + Math.sqrt(G.pop) * 14;
-  const edges = [...G.edges.values()].filter(e => !e.S.noFront && !e.S.auto && e.len > 70 && e.zmax < 0.3 && e.zmin > -0.3 && dist(e.pts[0].x, e.pts[0].y, pl.cx, pl.cy) < R);
-  if (!edges.length) return false;
-  for (let tries = 0; tries < 4; tries++) {
-    const e = edges[(Math.random() * edges.length) | 0], s = 32 + Math.random() * (e.len - 64), f = pointAt(e, s);
-    if (waterAt(f.x, f.y)) continue;
-    let crowded = false;
-    for (const n of G.nodes.values()) if (n.edges.length && dist(n.x, n.y, f.x, f.y) < 34) { crowded = true; break; }
-    if (crowded) continue;
-    const side = Math.random() < 0.5 ? 1 : -1;
-    if (tryRoad({ x: f.x, y: f.y }, { x: f.nx * side, y: f.ny * side }, 45 + Math.random() * 40, PRESETS.street, e)) return true;
-  }
-  return false;
-}
-// close loops: link two spots that are near as the crow flies but far apart by road
-function graphDist(src) {
-  const d = new Map([[src.id, 0]]), done = new Set();
-  for (;;) {
-    let best = null, bd = Infinity;
-    for (const [id, v] of d) if (!done.has(id) && v < bd) { bd = v; best = id; }
-    if (best === null || bd > 1600) break;
-    done.add(best);
-    const n = G.nodes.get(best);
-    for (const eid of n.edges) {
-      const e = G.edges.get(eid); if (!e) continue;
-      const o = e.a === best ? e.b : e.a, nd = bd + e.len;
-      if (nd < (d.get(o) ?? Infinity)) d.set(o, nd);
+function pickSuperblock() {
+  const pl = G.plan, cand = new Map();
+  for (const key in pl.sb) {
+    if (pl.sb[key].st < 3) continue;
+    const [i, j] = key.split(',').map(Number);
+    for (const [di, dj] of D4) {
+      const a = i + di, b = j + dj, k2 = sbKey(a, b);
+      if (pl.sb[k2] || cand.has(k2)) continue;
+      if (!sbValid(a, b)) { pl.sb[k2] = { st: -1 }; continue; }
+      if (!sbReachable(a, b)) continue;
+      cand.set(k2, [a, b]);
     }
   }
-  return d;
-}
-function connectorRoad() {
-  const pl = plan(), R = 260 + Math.sqrt(G.pop) * 14;
-  const cand = [...G.nodes.values()].filter(n => n.edges.length && n.edges.length < 4 && !isOut(n.id) && Math.abs(n.z) < 0.3 && dist(n.x, n.y, pl.cx, pl.cy) < R);
-  if (cand.length < 6) return false;
-  for (let k = 0; k < 4; k++) {
-    const A = cand[(Math.random() * cand.length) | 0], gd = graphDist(A);
-    const opts = [];
-    for (const B of cand) {
-      if (B === A) continue;
-      const eu = dist(A.x, A.y, B.x, B.y);
-      if (eu < 70 || eu > 200) continue;
-      const ratio = (gd.get(B.id) ?? 5000) / eu;
-      if (ratio > 2.6) opts.push([ratio, B, eu]);
-    }
-    opts.sort((a, b) => b[0] - a[0]);
-    for (const [, B, eu] of opts.slice(0, 4)) {
-      const mx = (A.x + B.x) / 2, my = (A.y + B.y) / 2, bend = (Math.random() - 0.5) * eu * 0.25;
-      const pts = quadPts({ x: A.x, y: A.y }, { x: mx - (B.y - A.y) / eu * bend, y: my + (B.x - A.x) / eu * bend }, { x: B.x, y: B.y });
-      if (!organicOK(pts, null, true)) continue;
-      if (buildRoad(pts.map(p => ({ x: p.x, y: p.y, z: 0 })), PRESETS.street, { node: A.id }, { node: B.id }, true)) { zoneAlong(pts, PRESETS.street); return true; }
-    }
+  if (!Object.keys(pl.sb).length) cand.set('0,0', [0, 0]);
+  let best = null, bs = 1e9;
+  for (const [a, b] of cand.values()) {
+    let indNext = false;
+    for (const [di, dj] of D4) { const o = pl.sb[sbKey(a + di, b + dj)]; if (o && o.style === 'ind') indNext = true; }
+    const s = sbDist(a, b) + hash(a, b, G.seed + 31) * 0.9 + (pl.want === 'ind' ? (indNext ? -3 : sbDist(a, b) < 1 ? 5 : 0) : indNext ? 0.8 : 0) + sbWater(a, b) * 1.5 - (pl.parkSB && pl.parkSB[0] === a && pl.parkSB[1] === b && G.pop > 250 ? 1 : 0);
+    if (s < bs) { bs = s; best = [a, b]; }
   }
+  return best;
+}
+function stepSuperblock() {
+  const pl = G.plan, c = pl.cur, key = sbKey(c.i, c.j);
+  let sb = pl.sb[key];
+  if (!sb) { const style = sbStyle(c.i, c.j); sb = pl.sb[key] = { st: 0, style, lay: sbLayout(c.i, c.j, style) }; }
+  const { i, j } = c;
+  if (c.stage === 0) {
+    buildArterial('v', j, i); buildArterial('v', j + 1, i); buildArterial('u', i, j); buildArterial('u', i + 1, j);
+    sb.st = 1; c.stage = 1;
+  } else if (c.stage === 1) {
+    buildLocals(sb.lay, sb.style);
+    for (const [a, b] of [[i, j], [i + 1, j], [i, j + 1], [i + 1, j + 1]]) setCorner(a, b);
+    sb.st = 2; c.stage = 2;
+  } else {
+    zoneSuperblock(i, j, sb);
+    sb.st = 3; pl.cur = null;
+  }
+}
+// ---------- freeways ----------
+function lineRuns() {
+  const pl = G.plan, lines = new Map(), runs = [];
+  for (const key in pl.seg) {
+    if (pl.seg[key] !== 1) continue;
+    const m = /^([uv])(-?\d+)_(-?\d+)$/.exec(key);
+    if (!m) continue;
+    const id = m[1] + m[2];
+    if (!lines.has(id)) lines.set(id, { kind: m[1], k: +m[2], idx: [] });
+    lines.get(id).idx.push(+m[3]);
+  }
+  for (const L of lines.values()) {
+    L.idx.sort((a, b) => a - b);
+    let a = L.idx[0];
+    for (let q = 1; q <= L.idx.length; q++) if (q === L.idx.length || L.idx[q] !== L.idx[q - 1] + 1) { runs.push({ kind: L.kind, k: L.k, a, b: L.idx[q - 1] }); a = L.idx[q]; }
+  }
+  return runs;
+}
+function runTraffic(r) {
+  let s = 0;
+  for (let t = cornerT(r.kind, r.a); t < cornerT(r.kind, r.b + 1); t += 25) {
+    const p = lineAt(r.kind, r.k, t), h = nearestRoad(p.x, p.y, 5, e => !e.S.noFront && e.S.lanes >= 4);
+    if (h) s += (laneCount(h.e, 0) + laneCount(h.e, 1)) / Math.max(20, h.e.len) * 25;
+  }
+  return s + ((r.kind === 'v' && r.k === 0) || (r.kind === 'u' && r.k === 1) ? 3 : 0) + (r.b - r.a) * 0.5;
+}
+function rampPair(kind, k, c) {
+  const T0 = cornerT(kind, c), X = lineAt(kind, k, T0), X2 = lineAt(kind, k, T0 + 1);
+  let fx = X2.x - X.x, fy = X2.y - X.y;
+  const l = Math.hypot(fx, fy) || 1; fx /= l; fy /= l;
+  const nx = -fy, ny = fx, pk = kind === 'u' ? 'v' : 'u', pT = kind === 'u' ? PU(k) : PV(k), OFF = 34;
+  let made = 0;
+  for (const sgn of [1, -1]) {
+    let E = null;
+    for (const dt of [OFF, -OFF]) { const p = lineAt(pk, c, pT + dt); if (((p.x - X.x) * nx + (p.y - X.y) * ny) * sgn > 0) E = p; }
+    if (!E || !nearestRoad(E.x, E.y, 4, (e, i) => !e.S.noFront && Math.abs(e.pts[i].z) < 0.3)) continue;
+    const hs = (() => { const p = lineAt(kind, k, T0 - sgn * 125); return nearestRoad(p.x, p.y, 5, (e, i) => e.S.freeway && Math.abs(e.pts[i].z - 1) < 0.15); })();
+    if (!hs) continue;
+    const S = { x: hs.x, y: hs.y }, Q = lineAt(kind, k, T0 - sgn * 58);
+    Q.x += nx * sgn * OFF; Q.y += ny * sgn * OFF;
+    const dx = fx * sgn, dy = fy * sgn, P1 = { x: S.x + dx * 35, y: S.y + dy * 35 }, P2 = { x: Q.x - dx * 25, y: Q.y - dy * 25 };
+    const pts = [];
+    for (let q = 0; q <= 14; q++) {
+      const t = q / 14, u = 1 - t;
+      pts.push({ x: u * u * u * S.x + 3 * u * u * t * P1.x + 3 * u * t * t * P2.x + t * t * t * Q.x, y: u * u * u * S.y + 3 * u * u * t * P1.y + 3 * u * t * t * P2.y + t * t * t * Q.y });
+    }
+    const dQ = dist(Q.x, Q.y, E.x, E.y), nq = Math.ceil(dQ / 5);
+    for (let q = 1; q <= nq; q++) pts.push({ x: lerp(Q.x, E.x, q / nq), y: lerp(Q.y, E.y, q / nq) });
+    const cum = [0];
+    for (let q = 1; q < pts.length; q++) cum.push(cum[q - 1] + dist(pts[q - 1].x, pts[q - 1].y, pts[q].x, pts[q].y));
+    const L = cum[cum.length - 1];
+    pts.forEach((p, q) => { p.z = cum[q] < L - 45 ? 1 : smooth((L - cum[q]) / 45); });
+    // only the last stretch is low enough to meet other roads; it must come down onto open ground
+    if (pts.some((p, q) => p.z < 0.55 && cum[q] < L - 9 && nearestRoad(p.x, p.y, 8, (e, i) => Math.abs(e.pts[i].z) < 0.5)) || svcInWay(pts, 6)) continue;
+    if (buildRoad(pts, RAMP2, null, null, true)) made++;
+  }
+  if (made) { const n = nodeNear(X, 6); if (n && n.ctl === 'round') { n.ctl = 'lights'; computeNodes(); } }
+  return made;
+}
+function buildFreeway(r) {
+  const pl = G.plan, { kind, k, a, b } = r;
+  const A = nodeNear(lineAt(kind, k, cornerT(kind, a)), 6), B = nodeNear(lineAt(kind, k, cornerT(kind, b + 1)), 6);
+  if (!A || !B) return false;
+  const t0 = cornerT(kind, a), t1 = cornerT(kind, b + 1), n = Math.ceil(Math.abs(t1 - t0) / 6), pts = [];
+  for (let q = 0; q <= n; q++) {
+    const t = lerp(t0, t1, q / n), p = lineAt(kind, k, t), p2 = lineAt(kind, k, t + 1), l = dist(p.x, p.y, p2.x, p2.y) || 1;
+    pts.push({ x: p.x - (p2.y - p.y) / l * 0.8, y: p.y + (p2.x - p.x) / l * 0.8, z: 1 });
+  }
+  pts[0] = { x: A.x, y: A.y }; pts[n] = { x: B.x, y: B.y };
+  const cum = [0];
+  for (let q = 1; q <= n; q++) cum.push(cum[q - 1] + dist(pts[q - 1].x, pts[q - 1].y, pts[q].x, pts[q].y));
+  const L = cum[n];
+  // climb to the high level over bridges and other freeways
+  const runs = [];
+  let ra = null;
+  pts.forEach((p, q) => {
+    const hi = !!nearestRoad(p.x, p.y, 16, (e, i) => e.pts[i].z > 0.4);
+    if (hi && ra === null) ra = cum[q];
+    if (!hi && ra !== null) { runs.push([ra, cum[q]]); ra = null; }
+  });
+  if (ra !== null) runs.push([ra, L]);
+  if (runs.some(([x0, x1]) => x0 < 140 || x1 > L - 140)) return false;
+  pts.forEach((p, q) => {
+    const s = cum[q];
+    let z = s < 75 ? smooth(s / 75) : s > L - 75 ? smooth((L - s) / 75) : 1;
+    for (const [x0, x1] of runs) { const d = s < x0 - 15 ? x0 - 15 - s : s > x1 + 15 ? s - x1 - 15 : 0; z += 1 - smooth(clamp(d / 55, 0, 1)); }
+    p.z = Math.min(2, z);
+  });
+  if (svcInWay(pts, 11)) return false;
+  if (!buildRoad(pts, FW_SPEC, { node: A.id }, { node: B.id }, true)) return false;
+  pl.fw.push({ kind, k, a, b });
+  pl.fwM = G.month;
+  let ramps = 0;
+  for (let c = a + 1; c <= b; c++) if ((c - a) % 2 === 1 || b - a <= 2) ramps += rampPair(kind, k, c);
+  toast(`${G.name} opened an elevated freeway over its busiest avenue${ramps ? `, with ${ramps} ramps` : ''}.`, 'good');
+  return true;
+}
+function tryFreeway() {
+  const pl = G.plan;
+  if (G.pop < 900 || pl.fw.length >= 1 + Math.floor(G.pop / 1400) || G.month - (pl.fwM ?? -99) < 8) return false;
+  if (G.commute < 1.6 && G.flow > 55 && G.pop < 2500) return false;
+  const runs = lineRuns().filter(r => r.b - r.a >= 2 && !pl.fw.some(f => f.kind === r.kind && Math.abs(f.k - r.k) <= 1));
+  runs.forEach(r => { r.score = runTraffic(r); });
+  runs.sort((x, y) => y.score - x.score);
+  for (const r of runs.slice(0, 3)) if (buildFreeway(r)) return true;
+  pl.fwM = G.month; // nothing suitable yet; look again later
   return false;
 }
-// relieve jams like a city engineer would
+// ---------- the city engineer ----------
 function organicTraffic() {
   const pl = plan();
   const svcNear = (x, y, r) => { let hit = false; forLotsIn(x - r - 50, y - r - 50, x + r + 50, y + r + 50, l => { if (l.z === ZS && dist(l.x, l.y, x, y) < r + Math.hypot(l.w, l.d) / 2) hit = true; }); return hit; };
   for (const n of G.nodes.values()) {
     if (n.edges.length < 3 || n.queue.length < 6 || n.freeway || n.ctl === 'round') continue;
     const crowded = [...G.nodes.values()].some(o => o !== n && o.edges.length >= 3 && dist(o.x, o.y, n.x, n.y) < (o.ctl === 'round' ? 95 : 45));
-    if (!crowded && !svcNear(n.x, n.y, 34) && (n.ctl === 'lights' || n.edges.length <= 4)) {
+    const ramp = n.edges.some(id => { const e = G.edges.get(id); return e && e.S.noFront; });
+    if (!crowded && !ramp && !svcNear(n.x, n.y, 34) && (n.ctl === 'lights' || n.edges.length <= 4)) {
       n.ctl = 'round'; computeNodes();
       const r = n.r + 10;
       forLotsIn(n.x - r - 20, n.y - r - 20, n.x + r + 20, n.y + r + 20, l => { if (l.z !== ZS && dist(l.x, l.y, n.x, n.y) < r + Math.max(l.w, l.d) / 2 - 2) removeLot(l, true); });
@@ -2083,15 +2369,32 @@ function organicTraffic() {
     }
     if (n.ctl === 'yield') { n.ctl = 'lights'; computeNodes(); return; }
   }
-  if (G.month - (pl.upg || 0) < 2) return;
+  // widen jammed avenues to three lanes each way
+  if (G.month - (pl.upg || 0) < 3) return;
   for (const e of G.edges.values()) {
-    if (e.S.lanes >= 4 || e.S.noFront || e.S.oneway || e.len < 40) continue;
+    if (e.S.lanes !== 4 || e.S.noFront || e.len < 40) continue;
     const dens = (laneCount(e, 0) + laneCount(e, 1)) / Math.max(1, e.len / 8);
-    if (dens > 0.7 && !svcNear((e.bb[0] + e.bb[2]) / 2, (e.bb[1] + e.bb[3]) / 2, Math.max(e.bb[2] - e.bb[0], e.bb[3] - e.bb[1]) / 2)) { upgradeEdge(e, PRESETS.avenue, true); pl.upg = G.month; return; }
+    if (dens > 0.8 && !svcNear((e.bb[0] + e.bb[2]) / 2, (e.bb[1] + e.bb[3]) / 2, Math.max(e.bb[2] - e.bb[0], e.bb[3] - e.bb[1]) / 2)) { upgradeEdge(e, BIG_AVE, true); pl.upg = G.month; return; }
   }
 }
-const ORGANIC_SVC = [['fire', 120], ['school', 220], ['police', 380], ['hospital', 650], ['school', 1000], ['stadium', 1300], ['fire', 1700], ['police', 2200], ['hospital', 3000]];
-function organicServices() {
+// shop lots nobody wants for a long time are rezoned for homes, as real towns do
+function organicRezone() {
+  const pl = G.plan;
+  if (G.month - (pl.rz || 0) < 3 || G.demand.c > -0.25 || G.demand.r < 0) return;
+  pl.rz = G.month;
+  const stale = [...G.lots.values()].filter(l => l.z === ZC && !l.b && G.time - (l.t0 ?? G.time) > 60).slice(0, 4);
+  for (const l of stale) {
+    const r = Math.hypot(l.w, l.d) / 2 + 2;
+    for (let y = l.y - r; y <= l.y + r; y += CELL / 2) for (let x = l.x - r; x <= l.x + r; x += CELL / 2) {
+      const c = cellOf(x, y);
+      if (c >= 0 && G.zone[c] === ZC && pointInLot(l, x, y, 3)) { G.zone[c] = ZR; G.zoneT[c] = clock; }
+    }
+    markZoneChange(l.x - r, l.y - r, l.x + r, l.y + r);
+  }
+  if (stale.length) { bakeTimer = 0; flushZoneChanges(); }
+}
+// when the map runs out of room, public buildings squeeze in wherever they fit
+function organicServicesFallback() {
   const pl = plan(), next = ORGANIC_SVC[pl.svc];
   if (!next || G.pop < next[1]) return;
   for (let k = 0; k < 60; k++) {
@@ -2107,32 +2410,44 @@ function organicConnect() {
   if (!free.length) return;
   free.sort((a, b) => { const A = G.nodes.get(a.id), B = G.nodes.get(b.id); return dist(A.x, A.y, pl.cx, pl.cy) - dist(B.x, B.y, pl.cx, pl.cy); });
   const out = G.nodes.get(free[0].id);
+  // run it into the nearest avenue junction, like a county road joining the grid
   let best = null, bd = 1e9;
-  for (const n of G.nodes.values()) if (n.edges.length && !isOut(n.id) && Math.abs(n.z) < 0.3) { const d = dist(n.x, n.y, out.x, out.y); if (d < bd) { bd = d; best = n; } }
+  for (const n of G.nodes.values()) {
+    if (!n.edges.length || isOut(n.id) || Math.abs(n.z) > 0.3 || n.ctl === 'round') continue;
+    if (!n.edges.some(id => { const e = G.edges.get(id); return e && e.S.lanes >= 4 && !e.S.noFront; })) continue;
+    const d = dist(n.x, n.y, out.x, out.y);
+    if (d < bd) { bd = d; best = n; }
+  }
   if (!best) return;
   const mx = (best.x + out.x) / 2, my = (best.y + out.y) / 2, len = bd || 1;
-  const pts = quadPts({ x: best.x, y: best.y }, { x: mx + (out.y - best.y) / len * len * 0.1, y: my - (out.x - best.x) / len * len * 0.1 }, { x: out.x, y: out.y });
-  if (buildRoad(pts.map(p => ({ ...p, z: 0 })), PRESETS.avenue, { node: best.id }, { node: out.id }, true)) toast(`${G.name} built an avenue out to ${free[0].name}.`);
+  const pts = resample(quadPts({ x: best.x, y: best.y }, { x: mx + (out.y - best.y) / len * len * 0.08, y: my - (out.x - best.x) / len * len * 0.08 }, { x: out.x, y: out.y }).map(p => ({ ...p, z: 0 })), 6);
+  if (!bridgeProfile(pts)) return;
+  if (buildRoad(pts, PRESETS.avenue, { node: best.id }, { node: out.id }, true)) toast(`${G.name} built an avenue out to ${free[0].name}.`);
+}
+function seedOrganic() {
+  const pl = plan();
+  for (const [i, j] of [[0, 0], [0, -1]]) {
+    pl.cur = { i, j, stage: 0 };
+    while (pl.cur) stepSuperblock();
+  }
 }
 function plannerTick() {
   const pl = plan();
   organicTraffic();
-  organicServices();
   organicConnect();
-  let empty = 0;
-  for (const l of G.lots.values()) if (!l.b && l.z !== ZS) empty++;
-  // a slow commute means the grid needs more ways through, not more cul-de-sacs
-  pl.link = (pl.link || 0) + (G.commute > 1.5 ? 2 : 1);
-  if (pl.link >= 8) { pl.link = 0; if (connectorRoad()) return; }
-  if (empty > 14 + G.pop / 50) return; // let houses catch up before laying more roads
-  // drift the town centre toward where people actually live
-  if (lists.homes && lists.homes.total) {
-    let sx = 0, sy = 0, n = 0;
-    for (const it of lists.homes.items) { sx += it.l.x; sy += it.l.y; n++; }
-    pl.cx = lerp(pl.cx, sx / n, 0.02); pl.cy = lerp(pl.cy, sy / n, 0.02);
-  }
-  const acts = 1 + (G.demand.r > 0.4 ? 1 : 0);
-  for (let a = 0; a < acts; a++) for (let t = 0; t < 4; t++) if (Math.random() < 0.55 ? extendRoad() : branchRoad()) break;
+  organicRezone();
+  if (pl.cur) { stepSuperblock(); return; }
+  const due = ORGANIC_SVC[pl.svc];
+  if (due && due[0] === 'stadium' && G.pop >= due[1] && !pl.wantStadium && !Object.values(pl.sb).some(s => s.style === 'stadium')) pl.wantStadium = true;
+  if (tryFreeway()) return;
+  // open a new neighbourhood once the land the city actually wants is nearly used up
+  const empty = { [ZR]: 0, [ZC]: 0, [ZI]: 0 };
+  for (const l of G.lots.values()) if (!l.b && empty[l.z] !== undefined) empty[l.z]++;
+  pl.want = G.demand.i > 0.2 && empty[ZI] < 5 && G.demand.i >= G.demand.r ? 'ind' : G.demand.r > 0.03 && empty[ZR] < 10 + G.pop / 80 ? 'res' : G.demand.c > 0.3 && empty[ZC] < 5 ? 'com' : null;
+  if (!pl.want) return;
+  const next = pickSuperblock();
+  if (next) pl.cur = { i: next[0], j: next[1], stage: 0 };
+  else organicServicesFallback();
 }
 
 // match days: crowds drive to the stadium, then all leave together
@@ -2661,8 +2976,8 @@ function foundCity(seed, mode) {
   const cy = hy + (hash(1, 1, seed) - 0.5) * 70, curve = [];
   for (let k = 0; k <= 20; k++) { const t = k / 20; curve.push({ x: lerp(lerp(0, 160, t), lerp(160, 320, t), t), y: lerp(lerp(hy, cy, t), lerp(cy, hy, t), t) }); }
   buildRoad(curve, { ...PRESETS.freeway, f: 2, b: 2 }, { node: out.id }, null, true);
-  buildRoad([{ x: 320, y: hy - 110 }, { x: 320, y: hy + 110 }], PRESETS.street, null, null, true);
   if (G.mode.play === 'grow') seedOrganic();
+  else buildRoad([{ x: 320, y: hy - 110 }, { x: 320, y: hy + 110 }], PRESETS.street, null, null, true);
   for (const e of G.edges.values()) e.born = -99;
   finishBoot();
 }
@@ -3066,6 +3381,7 @@ function drawLotsGround(lots) {
   }
 }
 function addShadows(lots, trees, parkTrees) {
+  const treeSh = cam.z >= 0.85; // zoomed out, tree shadows are too small to see but costly to fill
   ctx.beginPath();
   for (const l of lots) {
     const b = l.b;
@@ -3092,7 +3408,7 @@ function addShadows(lots, trees, parkTrees) {
           for (let k = 0; k < 8; k++) { const a = k / 8 * Math.PI * 2, rr = p.r * s; pts.push([wx + Math.cos(a) * rr, wy + Math.sin(a) * rr], [wx + ox + Math.cos(a) * rr, wy + oy + Math.sin(a) * rr]); }
         }
         addPoly(hull(pts));
-      } else if (p.t === 'tree') {
+      } else if (p.t === 'tree' && treeSh) {
         const s = partScale(b, p, age);
         if (s <= 0.02) continue;
         const [wx, wy] = toWorld(l, p.x, p.y), r = p.r * s;
@@ -3101,8 +3417,8 @@ function addShadows(lots, trees, parkTrees) {
       }
     }
   }
-  for (const t of trees) { const r = t.r; ctx.moveTo(t.x + r * 0.6 + r, t.y + r * 0.5); ctx.ellipse(t.x + r * 0.6, t.y + r * 0.5, r, r * 0.75, 0, 0, Math.PI * 2); }
-  for (const [d, s] of parkTrees) { const r = d.r * s; ctx.moveTo(d.x + r * 0.6 + r, d.y + r * 0.5); ctx.ellipse(d.x + r * 0.6, d.y + r * 0.5, r, r * 0.75, 0, 0, Math.PI * 2); }
+  if (treeSh) for (const t of trees) { const r = t.r; ctx.moveTo(t.x + r * 0.6 + r, t.y + r * 0.5); ctx.ellipse(t.x + r * 0.6, t.y + r * 0.5, r, r * 0.75, 0, 0, Math.PI * 2); }
+  if (treeSh) for (const [d, s] of parkTrees) { const r = d.r * s; ctx.moveTo(d.x + r * 0.6 + r, d.y + r * 0.5); ctx.ellipse(d.x + r * 0.6, d.y + r * 0.5, r, r * 0.75, 0, 0, Math.PI * 2); }
   ctx.fillStyle = P.shadow;
   ctx.fill();
 }
@@ -4446,7 +4762,7 @@ function frame(now) {
 }
 requestAnimationFrame(frame);
 
-window.cityroads = { w2s, upgrade: upgradeEdge, state: () => G, buildRoad, paintCircle, flushZoneChanges, floodCells, fillCells, cycleJunction, setTool, setView, setSpeed, begin, foundCity, quadPts, nodes: () => [...G.nodes.values()] };
+window.cityroads = { dbg: { serialize, loadCity }, cam, w2s, upgrade: upgradeEdge, state: () => G, buildRoad, paintCircle, flushZoneChanges, floodCells, fillCells, cycleJunction, setTool, setView, setSpeed, begin, foundCity, quadPts, nodes: () => [...G.nodes.values()] };
 if (window.claude && window.claude.hot && window.claude.hot.snapshot) window.claude.hot.snapshot(() => ({ city: G && state === 'play' ? serialize() : null }));
 const hotData = window.claude && window.claude.hot && window.claude.hot.data;
 if (hotData && hotData.city) { try { begin(() => loadCity(hotData.city)); } catch (e) { /* fall back to intro */ } }
