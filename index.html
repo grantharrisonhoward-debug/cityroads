@@ -235,7 +235,7 @@ body { background: var(--bg); color: var(--ink); font-family: var(--f-body); fon
       <div class="meter"><div class="track"><div class="fill" id="dC" style="background:var(--com)"></div></div><span>C</span></div>
       <div class="meter"><div class="track"><div class="fill" id="dI" style="background:var(--ind)"></div></div><span>I</span></div>
     </div>
-    <div class="cell row2"><button id="btnCities" class="citiesbtn" title="Save, load or start cities">Cities</button><button id="btnStats" class="citiesbtn" title="Graphs of how the city is doing">Stats</button><button id="btnAuto" class="citiesbtn on" title="Pause or resume the city growing by itself" hidden>Growing</button></div>
+    <div class="cell row2"><button id="btnCities" class="citiesbtn" title="Save, load or start cities">Cities</button><button id="btnStats" class="citiesbtn" title="Graphs of how the city is doing">Stats</button><button id="btnAuto" class="citiesbtn on" title="Pause or resume the city growing by itself" hidden>Growing</button><button id="btnFix" class="citiesbtn on" title="Let traffic engineers fix jams by themselves">Auto-fix</button></div>
     <div class="cell"><label id="sDate">Jan 2026</label>
       <div class="speeds">
         <button id="sp0" title="Pause (Space)" aria-label="Pause">II</button>
@@ -252,6 +252,7 @@ body { background: var(--bg); color: var(--ink); font-family: var(--f-body); fon
   <div class="sub">
     <div class="seg" id="roadOpts" hidden>
       <span class="lab">Preset</span>
+      <button data-preset="local">Local</button>
       <button data-preset="street">Street</button>
       <button data-preset="oneway">One-way</button>
       <button data-preset="avenue">Avenue</button>
@@ -412,22 +413,25 @@ body { background: var(--bg); color: var(--ink); font-family: var(--f-body); fon
 // =====================================================================
 // constants
 // =====================================================================
-const WW = 2000, WH = 1400, CELL = 10, CW = WW / CELL, CH = WH / CELL, NC = CW * CH;
+const CELL = 10;
+let WW = 2000, WH = 1400, CW = WW / CELL, CH = WH / CELL, NC = CW * CH, MAP_K = 1;
 const ZR = 2, ZC = 3, ZI = 4, ZP = 5, ZK = 6, ZS = 7;
 // Roads are described by a spec: lanes each way, median, speed limit and whether buildings may front onto it.
-const LANE_W = 4.5;
+const LANE_W = 3.6;
 const MEDIANS = { none: { name: 'None', w: 0, cost: 0 }, paint: { name: 'Painted', w: 1.2, cost: 0.3 }, grass: { name: 'Grass', w: 6, cost: 1.5 }, barrier: { name: 'Barrier', w: 1.6, cost: 1.5 } };
 const MEDIAN_ORDER = ['none', 'paint', 'grass', 'barrier'];
 const SPEEDS = [30, 40, 50, 60, 80, 100, 120];
 const PRESETS = {
+  local:     { name: 'Local street', f: 1, b: 1, med: 'none', kmh: 30, front: true, lw: 3.2 },
   street:    { name: 'Street', f: 1, b: 1, med: 'none', kmh: 40, front: true },
   oneway:    { name: 'One-way', f: 2, b: 0, med: 'none', kmh: 40, front: true },
   avenue:    { name: 'Avenue', f: 2, b: 2, med: 'paint', kmh: 50, front: true },
   boulevard: { name: 'Boulevard', f: 2, b: 2, med: 'grass', kmh: 60, front: true },
+  grand:     { name: 'Grand boulevard', f: 3, b: 3, med: 'grass', kmh: 60, front: true },
   freeway:   { name: 'Freeway', f: 3, b: 3, med: 'barrier', kmh: 100, front: false },
   ramp:      { name: 'Ramp', f: 1, b: 0, med: 'none', kmh: 60, front: false },
 };
-const LANE_SPEC = { f: 1, b: 1, med: 'none', kmh: 25, front: true, lw: 3.4 };
+const LANE_SPEC = PRESETS.local;
 const specCache = new Map();
 function specOf(o) {
   const key = `${o.f}/${o.b}/${o.b ? o.med : 'none'}/${o.kmh}/${o.front ? 1 : 0}/${o.lw || ''}`;
@@ -438,11 +442,11 @@ function specOf(o) {
     key, f: o.f, b: o.b, med, kmh: o.kmh, front: !!o.front, lw, medW, lanes,
     w: lanes * lw + medW + 1.6, oneway: !two, speed: o.kmh * 0.8, noFront: !o.front,
     co: two ? (o.f - o.b) * lw / 2 : 0, freeway: !o.front && o.kmh >= 70, auto: !!o.lw,
-    cost: Math.round((lanes * 1.6 + MEDIANS[med].cost + (o.kmh >= 80 ? 2 : 0)) * (o.lw ? 0 : 10)) / 10,
+    cost: Math.round((lanes * 1.6 + MEDIANS[med].cost + (o.kmh >= 80 ? 2 : 0)) * 10) / 10,
     up: lanes * 0.008 + MEDIANS[med].cost * 0.004,
   };
-  const pre = Object.values(PRESETS).find(q => q.f === s.f && q.b === s.b && (s.b ? q.med === med : true) && q.kmh === s.kmh && q.front === s.front);
-  s.name = o.lw ? 'Lane' : pre ? pre.name : s.freeway ? (two ? `${s.f}+${s.b} freeway` : `${s.f}-lane freeway`) : s.noFront && !two ? `${s.f}-lane ramp` : two ? `${s.f}+${s.b} lane road` : `${s.f}-lane one-way`;
+  const pre = Object.values(PRESETS).find(q => q.f === s.f && q.b === s.b && (s.b ? q.med === med : true) && q.kmh === s.kmh && q.front === s.front && !!q.lw === !!o.lw);
+  s.name = o.lw ? 'Local street' : pre ? pre.name : s.freeway ? (two ? `${s.f}+${s.b} freeway` : `${s.f}-lane freeway`) : s.noFront ? (two ? 'Two-way ramp' : `${s.f}-lane ramp`) : two ? `${s.f}+${s.b} lane road` : `${s.f}-lane one-way`;
   specCache.set(key, s);
   return s;
 }
@@ -561,7 +565,17 @@ let G = null;
 let clock = 0;                       // real seconds, for purely visual animation
 let water, roadMask, animFlag, lvGrid, pollGrid;
 let segGrid = new Map(), lotGrid = new Map(), treeGrid = new Map();
-const SEG = 40, LG = 40, TG = 40, LVC = 40, LW = WW / LVC, LH = WH / LVC;
+const SEG = 40, LG = 40, TG = 40, LVC = 40;
+let LW = WW / LVC, LH = WH / LVC;
+// standard maps are 2000 × 1400; huge maps are three times as wide and tall
+function setMapSize(k) {
+  MAP_K = k; WW = 2000 * k; WH = 1400 * k; CW = WW / CELL; CH = WH / CELL; NC = CW * CH; LW = WW / LVC; LH = WH / LVC;
+  if (typeof zoneLayer !== 'undefined' && zoneLayer.width !== CW * 4) {
+    zoneLayer.width = parkLayer.width = CW * 4; zoneLayer.height = parkLayer.height = CH * 4;
+    groundLayer.width = 100 * k; groundLayer.height = 70 * k; groundFor = null; zoneFor = null;
+    overlayLayer.width = LW; overlayLayer.height = LH;
+  }
+}
 const gkey = (gx, gy) => (gx + 64) * 8192 + (gy + 64);
 let particles = [], parks = [], animCells = [];
 let lotArr = [], lotsDirty = true, parksDirty = false, parksTimer = 0, bakeTimer = -1;
@@ -570,12 +584,13 @@ const lists = { homes: null, jobs: null, shops: null, factories: null };
 // options picked when founding a city
 const BUDGETS = { tight: 10000, normal: 25000, rich: 100000, unlimited: 1e9 };
 const TRAFFIC_MULT = { light: 0.6, normal: 1, rush: 1.5 };
-const DEFAULT_MODE = { play: 'build', budget: 'normal', traffic: 'normal', land: 'valley', unlockAll: false };
+const DEFAULT_MODE = { play: 'build', budget: 'normal', traffic: 'normal', land: 'valley', size: 'normal', unlockAll: false };
 function newCity(seed, mode) {
   mode = { ...DEFAULT_MODE, ...(mode || {}) };
   if (mode.play === 'grow') { mode.budget = 'unlimited'; mode.unlockAll = true; }
+  setMapSize(mode.size === 'huge' ? 3 : 1);
   return {
-    seed, mode, hist: [], name: 'Riverton', money: BUDGETS[mode.budget] || 25000, time: 0, month: 0, monthAcc: 0, net: 0, milestone: 0,
+    seed, mode, hx: MAP_K > 1 ? Math.round(WW * 0.28) : 320, hist: [], name: 'Riverton', money: BUDGETS[mode.budget] || 25000, time: 0, month: 0, monthAcc: 0, net: 0, milestone: 0,
     pop: 0, jc: 0, ji: 0, demand: { r: 1, c: 0, i: 0.5 }, flow: 100, commute: 1, speed: 1,
     nodes: new Map(), edges: new Map(), lots: new Map(), nextId: 1, cars: [],
     zone: new Uint8Array(NC), zoneT: new Float32Array(NC).fill(-99), trees: [], river: [], lakes: [],
@@ -590,24 +605,28 @@ function genTerrain(g) {
   const bx = WW * (0.6 + rnd() * 0.08), ph = rnd() * 6.28, land = (g.mode && g.mode.land) || 'valley';
   if (land === 'valley')
     for (let y = -60; y <= WH + 60; y += 20)
-      g.river.push({ x: bx + Math.sin(y * 0.0035 + ph) * 120 + (vnoise(y * 0.01, 1.5, s) - 0.5) * 110, y, w: 34 + vnoise(y * 0.006, 7.7, s) * 36 });
+      g.river.push({ x: bx + Math.sin(y * 0.0035 / Math.sqrt(MAP_K) + ph) * 120 * Math.sqrt(MAP_K) + (vnoise(y * 0.01, 1.5, s) - 0.5) * 110, y, w: 34 + vnoise(y * 0.006, 7.7, s) * 36 });
   const lake = (lx, ly, scale) => {
-    if (Math.abs(ly - g.hy) < 220 && lx < 900) ly = g.hy + (ly < g.hy ? -280 : 280);
+    if (Math.abs(ly - g.hy) < 220 && lx < g.hx + 580) ly = g.hy + (ly < g.hy ? -280 : 280);
     ly = clamp(ly, 120, WH - 120);
     for (let k = 0; k < 8; k++) {
       const a = k / 8 * Math.PI * 2 + rnd(), d = rnd() * 46 * scale;
       g.lakes.push({ x: lx + Math.cos(a) * d, y: ly + Math.sin(a) * d * 0.7, r: (30 + rnd() * 34) * scale });
     }
   };
-  if (land === 'valley') lake(380 + rnd() * 520, 160 + rnd() * (WH - 320), 1);
+  if (MAP_K > 1) {
+    // a huge map gets a scatter of lakes of its own
+    const n = land === 'valley' ? 5 : land === 'lakes' ? 12 : 0;
+    for (let k = 0; k < n; k++) lake(200 + rnd() * (WW - 400), 200 + rnd() * (WH - 400), 0.9 + rnd() * (land === 'lakes' ? 1.4 : 0.8));
+  } else if (land === 'valley') lake(380 + rnd() * 520, 160 + rnd() * (WH - 320), 1);
   else if (land === 'lakes') { lake(500 + rnd() * 300, 200 + rnd() * 300, 1.2); lake(1200 + rnd() * 400, 300 + rnd() * 600, 1.6); lake(800 + rnd() * 500, 900 + rnd() * 300, 1); }
   buildWater(g);
   for (let gy = 0; gy < WH / 12; gy++) for (let gx = 0; gx < WW / 12; gx++) {
     const x = gx * 12 + hash(gx, gy, s) * 9, y = gy * 12 + hash(gy, gx, s + 1) * 9;
     const n = vnoise(x * 0.006, y * 0.006, s + 7) * 0.7 + vnoise(x * 0.02, y * 0.02, s + 11) * 0.3;
     if (n < 0.56 || waterNear(x, y, 6)) continue;
-    if (Math.abs(y - g.hy) < 40 && x < 420) continue;
-    if (dist(x, y, 330, g.hy) < 170) continue;
+    if (Math.abs(y - g.hy) < 40 && x < g.hx + 100) continue;
+    if (dist(x, y, g.hx + 10, g.hy) < 170) continue;
     g.trees.push({ x, y, r: 3.6 + hash(gx, gy, s + 3) * 2.8, c: (hash(gx, gy, s + 4) * 4) | 0, alive: true });
   }
 }
@@ -657,6 +676,7 @@ function fellTrees(test, x0, y0, x1, y1) {
     t.alive = false; n++;
     if (Math.random() < 0.3) puff(t.x, t.y, 'leaf', 2);
   });
+  if (n) forestFor = null;
   return n;
 }
 
@@ -780,7 +800,7 @@ function computeNodes() {
     for (const id of n.edges) { const e = G.edges.get(id); hw = Math.max(hw, e.S.w / 2 + Math.abs(e.S.co)); if (!e.S.noFront) fw = false; }
     n.freeway = fw;
     if (fw && n.ctl === 'round') n.ctl = 'yield';
-    n.r = deg <= 2 ? 0 : n.ctl === 'round' ? Math.max(22, hw + 12) : hw + 2;
+    n.r = deg <= 2 ? 0 : n.ctl === 'round' ? Math.max(17, hw + 9) : hw + 2;
     n.groups = new Map();
     let axis = null;
     for (const id of n.edges) {
@@ -1566,12 +1586,12 @@ const groundLayer = document.createElement('canvas');
 groundLayer.width = 100; groundLayer.height = 70;
 let groundFor = null, zoneFor = null;
 function bakeGround() {
-  const g = groundLayer.getContext('2d'), img = g.createImageData(100, 70);
+  const gw = groundLayer.width, gh = groundLayer.height, g = groundLayer.getContext('2d'), img = g.createImageData(gw, gh);
   const base = parseHex(P.ground), vars = P.groundVar.map(parseHex);
-  for (let y = 0; y < 70; y++) for (let x = 0; x < 100; x++) {
+  for (let y = 0; y < gh; y++) for (let x = 0; x < gw; x++) {
     const n = vnoise(x * 0.12, y * 0.12, G.seed + 50), m = vnoise(x * 0.4, y * 0.4, G.seed + 51);
     const v = vars[n < 0.4 ? 0 : n > 0.62 ? 1 : 2], t = Math.abs(n - 0.5) * 1.6 * (0.7 + m * 0.3);
-    const i = (y * 100 + x) * 4;
+    const i = (y * gw + x) * 4;
     img.data[i] = lerp(base[0], v[0], t); img.data[i + 1] = lerp(base[1], v[1], t); img.data[i + 2] = lerp(base[2], v[2], t); img.data[i + 3] = 255;
   }
   g.putImageData(img, 0, 0);
@@ -1935,8 +1955,8 @@ function endOfMonth() {
 const SB_A = 210;
 const FW_SPEC = { f: 2, b: 2, med: 'barrier', kmh: 100, front: false };
 const RAMP2 = { f: 1, b: 1, med: 'none', kmh: 60, front: false };
-const BIG_AVE = { f: 3, b: 3, med: 'grass', kmh: 60, front: true };
-const HOME_ST = { f: 1, b: 1, med: 'none', kmh: 40, front: true, lw: 3.8 }; // quiet residential street, no markings
+const BIG_AVE = PRESETS.grand;
+const HOME_ST = PRESETS.local; // quiet residential street, no markings
 const ORGANIC_SVC = [['fire', 120], ['school', 220], ['police', 380], ['hospital', 650], ['school', 1000], ['stadium', 1300], ['fire', 1700], ['police', 2200], ['hospital', 3000], ['school', 3600]];
 const PU = i => i * SB_A + (i ? (hash(i, 11, G.seed) - 0.5) * 44 : 0);
 const PV = j => j * SB_A + (j ? (hash(j, 13, G.seed) - 0.5) * 44 : 0);
@@ -1968,7 +1988,7 @@ function newPlan() {
   const pl = { v2: true, th: (rnd() - 0.5) * 0.3, ox: 0, oy: 0, sb: {}, seg: { 'v0_-1': 2 }, svc: old ? old.svc || 0 : 0, conn: old ? old.conn || 0 : 0, fw: [], upg: 0, cur: null };
   G.plan = pl;
   const w0 = W(0, 0);
-  pl.ox = 320 - w0.x; pl.oy = G.hy - w0.y;
+  pl.ox = G.hx - w0.x; pl.oy = G.hy - w0.y;
   const c = W(PU(1), PV(0));
   pl.cx = c.x; pl.cy = c.y;
   // a big park a superblock or two from the centre, by the water if there is some
@@ -2426,28 +2446,64 @@ function tryFreeway() {
   return false;
 }
 // ---------- the city engineer ----------
-function organicTraffic() {
-  const pl = plan();
+// The traffic engineer: junctions and roads that stay jammed for a couple of months get fixed, one
+// at a time — lights, then a roundabout, then wider roads. Works in every mode (it pays its way
+// unless the budget is unlimited) and can be switched off from the top bar.
+function trafficEngineer() {
+  const grow = G.mode.play === 'grow', free = G.mode.budget === 'unlimited';
+  for (const n of G.nodes.values()) n.jam = n.edges.length >= 3 && n.queue.length >= 5 ? (n.jam || 0) + 1 : Math.max(0, (n.jam || 0) - 0.5);
+  for (const e of G.edges.values()) {
+    const dens = (laneCount(e, 0) + laneCount(e, 1)) / Math.max(1, e.len * e.S.lanes / 9);
+    e.jam = dens > 0.55 ? (e.jam || 0) + 1 : Math.max(0, (e.jam || 0) - 0.5);
+  }
+  if (G.month - (G.fixM ?? -9) < 1) return;
   const svcNear = (x, y, r) => { let hit = false; forLotsIn(x - r - 50, y - r - 50, x + r + 50, y + r + 50, l => { if (l.z === ZS && dist(l.x, l.y, x, y) < r + Math.hypot(l.w, l.d) / 2) hit = true; }); return hit; };
-  for (const n of G.nodes.values()) {
-    if (n.edges.length < 3 || n.queue.length < 6 || n.freeway || n.ctl === 'round') continue;
-    const crowded = [...G.nodes.values()].some(o => o !== n && o.edges.length >= 3 && dist(o.x, o.y, n.x, n.y) < (o.ctl === 'round' ? 95 : 45));
+  const afford = c => free || G.money >= c + 500;
+  const done = msg => { G.fixM = G.month; toast(`Traffic fix: ${msg}`); };
+  // the next design up for a jammed road, or null when it can't sensibly grow
+  const nextSpec = e => {
+    const S = e.S;
+    if (S.noFront || S.oneway) return null;
+    if (S.auto) return grow ? null : PRESETS.street;
+    if (S.lanes === 2) return grow ? null : PRESETS.avenue;
+    if (S.lanes === 4) return BIG_AVE;
+    return null;
+  };
+  const widen = e => {
+    const spec = nextSpec(e);
+    if (!spec || e.len < 30) return false;
+    const cost = Math.max(50, roadCost(e.pts, spec) - Math.round(roadCost(e.pts, e.spec) * 0.5));
+    if (!afford(cost) || svcNear((e.bb[0] + e.bb[2]) / 2, (e.bb[1] + e.bb[3]) / 2, Math.max(e.bb[2] - e.bb[0], e.bb[3] - e.bb[1]) / 2)) return false;
+    if (!upgradeEdge(e, spec, true)) return false;
+    e.jam = 0;
+    done(`widened a jammed road to a ${e.S.name.toLowerCase()}${free ? '' : ` ($${fmt(cost)})`}.`);
+    return true;
+  };
+  const nodes = [...G.nodes.values()].filter(n => n.jam >= 18 && !n.freeway).sort((a, b) => b.jam * b.queue.length - a.jam * a.queue.length);
+  for (const n of nodes.slice(0, 3)) {
     const ramp = n.edges.some(id => { const e = G.edges.get(id); return e && e.S.noFront; });
-    if (!crowded && !ramp && !svcNear(n.x, n.y, 34) && (n.ctl === 'lights' || n.edges.length <= 4)) {
-      n.ctl = 'round'; computeNodes();
-      const r = n.r + 10;
-      forLotsIn(n.x - r - 20, n.y - r - 20, n.x + r + 20, n.y + r + 20, l => { if (l.z !== ZS && dist(l.x, l.y, n.x, n.y) < r + Math.max(l.w, l.d) / 2 - 2) removeLot(l, true); });
+    const crowded = [...G.nodes.values()].some(o => o !== n && o.edges.length >= 3 && dist(o.x, o.y, n.x, n.y) < (o.ctl === 'round' ? 80 : 40));
+    if (n.ctl === 'yield' && afford(JUNC.lights.cost) && isUnlocked('lights')) {
+      n.ctl = 'lights'; computeNodes(); n.jam = 0;
+      if (!free) G.money -= JUNC.lights.cost;
+      done('added traffic lights at a jammed junction.');
       return;
     }
-    if (n.ctl === 'yield') { n.ctl = 'lights'; computeNodes(); return; }
+    if (n.ctl === 'lights' && !crowded && !ramp && n.edges.length <= 5 && !svcNear(n.x, n.y, 30) && afford(JUNC.round.cost) && isUnlocked('round')) {
+      n.ctl = 'round'; computeNodes(); n.jam = 0;
+      if (!free) G.money -= JUNC.round.cost;
+      const r = n.r + 10;
+      forLotsIn(n.x - r - 20, n.y - r - 20, n.x + r + 20, n.y + r + 20, l => { if (l.z !== ZS && dist(l.x, l.y, n.x, n.y) < r + Math.max(l.w, l.d) / 2 - 2) removeLot(l, true); });
+      done('turned a jammed junction into a roundabout.');
+      return;
+    }
+    // the junction is as good as it gets: widen its busiest approach
+    const busiest = n.edges.map(id => G.edges.get(id)).filter(Boolean).sort((a, b) => (laneCount(b, 0) + laneCount(b, 1)) - (laneCount(a, 0) + laneCount(a, 1)));
+    for (const e of busiest) if (widen(e)) return;
+    n.jam = 0;
   }
-  // widen jammed avenues to three lanes each way
-  if (G.month - (pl.upg || 0) < 3) return;
-  for (const e of G.edges.values()) {
-    if (e.S.lanes !== 4 || e.S.noFront || e.len < 40) continue;
-    const dens = (laneCount(e, 0) + laneCount(e, 1)) / Math.max(1, e.len / 8);
-    if (dens > 0.8 && !svcNear((e.bb[0] + e.bb[2]) / 2, (e.bb[1] + e.bb[3]) / 2, Math.max(e.bb[2] - e.bb[0], e.bb[3] - e.bb[1]) / 2)) { upgradeEdge(e, BIG_AVE, true); pl.upg = G.month; return; }
-  }
+  const edges = [...G.edges.values()].filter(e => e.jam >= 18).sort((a, b) => b.jam - a.jam);
+  for (const e of edges.slice(0, 3)) if (widen(e)) return; else e.jam = 0;
 }
 // shop lots nobody wants for a long time are rezoned for homes, as real towns do
 function organicRezone() {
@@ -2505,7 +2561,6 @@ function seedOrganic() {
 }
 function plannerTick() {
   const pl = plan();
-  organicTraffic();
   organicConnect();
   organicRezone();
   if (pl.cur) { stepSuperblock(); return; }
@@ -2957,6 +3012,7 @@ function update(dt) {
   while (G.truckAcc >= 1) { G.truckAcc--; if (G.cars.length < bgCap) truckTrip(); }
   stepEvents(dt);
   if (G.mode.play === 'grow' && G.autoOn !== false) { G.planAcc = (G.planAcc || 0) + dt; if (G.planAcc >= 1.1) { G.planAcc = 0; plannerTick(); } }
+  if (G.autoFix !== false) { G.fixAcc = (G.fixAcc || 0) + dt; if (G.fixAcc >= 1.1) { G.fixAcc = 0; trafficEngineer(); } }
   if (connectedOuts().length >= 2) {
     G.thruAcc += dt * Math.min(1.2, 0.2 + G.month * 0.005 + G.pop / 4000) * (G.mode.play === 'grow' ? 0.5 * growDamp() : 1);
     while (G.thruAcc >= 1) { G.thruAcc--; if (G.cars.length < bgCap) thruTrip(); }
@@ -2978,7 +3034,7 @@ function serialize() {
   G.trees.forEach((t, i) => { alive[i] = t.alive ? 1 : 0; });
   return {
     v: 4, slot: G.slot, seed: G.seed, name: G.name, money: G.money, time: G.time, month: G.month, monthAcc: G.monthAcc, net: G.net, milestone: G.milestone,
-    unlocked: G.unlocked, outs: G.outs, mode: G.mode, hist: G.hist, evNext: G.evNext, plan: G.plan, autoOn: G.autoOn, nextId: G.nextId, commute: G.commute,
+    unlocked: G.unlocked, outs: G.outs, mode: G.mode, hist: G.hist, evNext: G.evNext, plan: G.plan, autoOn: G.autoOn, autoFix: G.autoFix, fixM: G.fixM, nextId: G.nextId, commute: G.commute,
     nodes: [...G.nodes.values()].map(n => [n.id, r1(n.x), r1(n.y), n.ctl, r1(n.z)]),
     edges: [...G.edges.values()].map(e => [e.id, e.a, e.b, e.spec, e.pts.flatMap(p => [r1(p.x), r1(p.y), Math.round(p.z * 100) / 100])]),
     lots: [...G.lots.values()].map(l => [r1(l.x), r1(l.y), l.xa.x, l.xa.y, l.ya.x, l.ya.y, r1(l.w), r1(l.d), l.z, l.b ? l.b.level : 0, l.b && l.b.abandoned ? 1 : 0, l.svc || 0]),
@@ -3046,10 +3102,11 @@ function foundCity(seed, mode) {
   }
   const out = G.nodes.get(G.outs[0].id);
   const cy = hy + (hash(1, 1, seed) - 0.5) * 70, curve = [];
-  for (let k = 0; k <= 20; k++) { const t = k / 20; curve.push({ x: lerp(lerp(0, 160, t), lerp(160, 320, t), t), y: lerp(lerp(hy, cy, t), lerp(cy, hy, t), t) }); }
+  const hx = G.hx;
+  for (let k = 0; k <= 20 * MAP_K; k++) { const t = k / (20 * MAP_K), wig = MAP_K > 1 ? Math.sin(t * Math.PI * 2) * 90 * (1 - t) : 0; curve.push({ x: lerp(lerp(0, hx / 2, t), lerp(hx / 2, hx, t), t), y: wig + lerp(lerp(hy, cy, t), lerp(cy, hy, t), t) }); }
   buildRoad(curve, { ...PRESETS.freeway, f: 2, b: 2 }, { node: out.id }, null, true);
   if (G.mode.play === 'grow') seedOrganic();
-  else buildRoad([{ x: 320, y: hy - 110 }, { x: 320, y: hy + 110 }], PRESETS.street, null, null, true);
+  else buildRoad([{ x: hx, y: hy - 110 }, { x: hx, y: hy + 110 }], PRESETS.street, null, null, true);
   for (const e of G.edges.values()) e.born = -99;
   finishBoot();
 }
@@ -3066,7 +3123,7 @@ function finishBoot() {
 function loadCity(d) {
   G = newCity(d.seed, d.mode);
   genTerrain(G);
-  Object.assign(G, { plan: d.plan || null, autoOn: d.autoOn !== false, evNext: d.evNext || 0, hist: d.hist || [], slot: d.slot, name: d.name, money: d.money, time: d.time, month: d.month, monthAcc: d.monthAcc, net: d.net, milestone: d.milestone, unlocked: d.unlocked || {}, commute: d.commute || 1 });
+  Object.assign(G, { plan: d.plan || null, autoOn: d.autoOn !== false, autoFix: d.autoFix !== false, fixM: d.fixM, evNext: d.evNext || 0, hist: d.hist || [], slot: d.slot, name: d.name, money: d.money, time: d.time, month: d.month, monthAcc: d.monthAcc, net: d.net, milestone: d.milestone, unlocked: d.unlocked || {}, commute: d.commute || 1 });
   G.zone.set(fromB64(d.zone));
   const alive = fromB64(d.trees);
   G.trees.forEach((t, i) => { t.alive = alive[i] !== 0; });
@@ -3100,7 +3157,7 @@ function resize() {
 }
 const s2w = (sx, sy) => ({ x: (sx - vw / 2) / cam.z + cam.x, y: (sy - vh / 2) / cam.z + cam.y });
 const w2s = (x, y) => ({ x: (x - cam.x) * cam.z + vw / 2, y: (y - cam.y) * cam.z + vh / 2 });
-function clampCam() { cam.z = clamp(cam.z, 0.32, 5); cam.x = clamp(cam.x, 0, WW); cam.y = clamp(cam.y, 0, WH); }
+function clampCam() { cam.z = clamp(cam.z, 0.32 / Math.max(1, MAP_K * 0.8), 5); cam.x = clamp(cam.x, 0, WW); cam.y = clamp(cam.y, 0, WH); }
 function setCamTransform() { ctx.setTransform(dpr * cam.z, 0, 0, dpr * cam.z, dpr * (vw / 2 - cam.x * cam.z), dpr * (vh / 2 - cam.y * cam.z)); }
 function rrect(x, y, w, h, r) {
   r = Math.min(r, Math.abs(w) / 2, Math.abs(h) / 2);
@@ -3191,7 +3248,7 @@ function drawRoads(layer) {
     ctx.lineCap = 'round';
   } else {
     // shadow on the ground, then pillars, then the deck
-    ctx.strokeStyle = P.hwShadow;
+    ctx.strokeStyle = P.hwShadow; ctx.lineCap = "butt";
     for (const [e, a, b, p] of runs) { ctx.beginPath(); edgePath(e, a, b, e.S.co, 2); ctx.lineWidth = e.S.w * grow(p); ctx.stroke(); }
     for (const [e, a, b] of runs) {
       for (let s = Math.ceil(a / 26) * 26; s < b; s += 26) {
@@ -3206,8 +3263,24 @@ function drawRoads(layer) {
       }
     }
   }
-  for (const [e, a, b, p] of runs) { ctx.beginPath(); edgePath(e, a, b, e.S.co, 0); ctx.strokeStyle = layer > 0 ? P.deck : P.roadEdge; ctx.lineWidth = (e.S.w + 3) * grow(p); ctx.stroke(); }
-  for (const [e, a, b, p] of runs) { ctx.beginPath(); edgePath(e, a, b, e.S.co, 0); ctx.strokeStyle = P.road; ctx.lineWidth = e.S.w * grow(p); ctx.stroke(); }
+  // where a road changes level mid-way (a ramp up to a bridge) the two halves butt together seamlessly;
+  // only real road ends get rounded caps, which also fill in junctions
+  const strokeRuns = (col, extra) => {
+    ctx.lineCap = 'butt';
+    for (const [e, a, b, p] of runs) {
+      const w = (e.S.w + extra) * grow(p);
+      ctx.beginPath(); edgePath(e, a, b, e.S.co, 0); ctx.strokeStyle = typeof col === 'function' ? col(e) : col; ctx.lineWidth = w; ctx.stroke();
+      ctx.fillStyle = ctx.strokeStyle;
+      for (const s of [a, b]) {
+        if (s > 0.01 && s < e.len - 0.01 && !(s === b && p < 1)) continue;
+        const f = pointAt(e, s);
+        ctx.beginPath(); ctx.arc(f.x + f.nx * e.S.co, f.y + f.ny * e.S.co - lift(f.z), w / 2, 0, 7); ctx.fill();
+      }
+    }
+    ctx.lineCap = 'round';
+  };
+  strokeRuns(layer > 0 ? P.deck : P.roadEdge, 3);
+  strokeRuns(P.road, 0);
   // junction plates and roundabouts at this level
   for (const n of G.nodes.values()) {
     if (n.edges.length < 3 || zClass(n.z) !== layer || !inView(n.x, n.y, 40)) continue;
@@ -3494,6 +3567,36 @@ function addShadows(lots, trees, parkTrees) {
   ctx.fillStyle = P.shadow;
   ctx.fill();
 }
+// far out over a huge map, the woods are drawn from one pre-rendered image
+const forestLayer = document.createElement('canvas');
+let forestFor = null, forestAt = 0;
+function drawForestFar() {
+  if (forestLayer.width !== WW / 4 || (forestFor !== P && (clock - forestAt > 2 || !forestAt))) {
+    forestLayer.width = WW / 4; forestLayer.height = WH / 4;
+    const f = forestLayer.getContext('2d');
+    f.clearRect(0, 0, forestLayer.width, forestLayer.height);
+    for (let c = 0; c < P.tree.length; c++) {
+      f.beginPath();
+      for (const t of G.trees) if (t.alive && t.c === c) { f.moveTo(t.x / 4 + t.r / 4, t.y / 4); f.arc(t.x / 4, t.y / 4, t.r / 4, 0, 7); }
+      f.fillStyle = P.tree[c]; f.fill();
+    }
+    forestFor = P; forestAt = clock;
+  }
+  ctx.drawImage(forestLayer, 0, 0, WW, WH);
+}
+function drawLotsFar(lots) {
+  for (const l of lots) {
+    const b = l.b;
+    if (!b) continue;
+    for (const p of b.parts) {
+      if (p.t !== 'box' && p.t !== 'oval') continue;
+      const w = p.t === 'oval' ? p.rx * 2 : p.w, h = p.t === 'oval' ? p.ry * 2 : p.h;
+      const a = toWorld(l, p.x - w / 2, p.y - h / 2), q = toWorld(l, p.x + w / 2, p.y - h / 2), r = toWorld(l, p.x + w / 2, p.y + h / 2), d = toWorld(l, p.x - w / 2, p.y + h / 2);
+      ctx.fillStyle = p.t === 'oval' ? P.grass : b.abandoned ? '#a7a49c' : bcol(p.c);
+      ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(q[0], q[1]); ctx.lineTo(r[0], r[1]); ctx.lineTo(d[0], d[1]); ctx.fill();
+    }
+  }
+}
 function drawLotBodies(lots) {
   for (const l of lots) {
     const b = l.b;
@@ -3759,26 +3862,34 @@ function draw() {
   if (viewMode === 'value' && lvGrid) { ctx.globalAlpha = 0.5; ctx.drawImage(overlayLayer, 0, 0, WW, WH); ctx.globalAlpha = 1; }
   drawRoads(-1);
   drawRoads(0);
-  const lots = visibleLots();
-  drawLotsGround(lots);
+  const lots = visibleLots(), far = cam.z < 0.3; // zoomed far out over a huge map: draw a simpler city
+  if (!far) drawLotsGround(lots);
   const trees = [];
-  forTreesIn(view.x0 - 10, view.y0 - 10, view.x1 + 10, view.y1 + 10, t => trees.push(t));
+  if (!(far && MAP_K > 1)) forTreesIn(view.x0 - 10, view.y0 - 10, view.x1 + 10, view.y1 + 10, t => trees.push(t));
   const parkTrees = [];
   for (const pk of parks) for (const d of pk.decos) {
     if (d.k !== 'tree' || !inView(d.x, d.y, 10)) continue;
     const t = clamp((clock - d.t0) / 0.55, 0, 1);
     if (t > 0) parkTrees.push([d, easeBack(t)]);
   }
-  addShadows(lots, trees, parkTrees);
-  drawCars(0);
-  drawLotBodies(lots);
-  for (const t of trees) treeBody(t.x, t.y, t.r, P.tree[t.c], 1);
+  if (cam.z >= 0.45) addShadows(lots, trees, parkTrees);
+  if (!far) drawCars(0);
+  if (far) drawLotsFar(lots); else drawLotBodies(lots);
+  if (far && MAP_K > 1) drawForestFar();
+  else if (cam.z < 0.45) {
+    // one path per tree colour instead of one per tree
+    for (let c = 0; c < P.tree.length; c++) {
+      ctx.beginPath();
+      for (const t of trees) if (t.c === c) { ctx.moveTo(t.x + t.r, t.y); ctx.arc(t.x, t.y, t.r, 0, 7); }
+      ctx.fillStyle = P.tree[c]; ctx.fill();
+    }
+  } else for (const t of trees) treeBody(t.x, t.y, t.r, P.tree[t.c], 1);
   for (const [d, s] of parkTrees) treeBody(d.x, d.y, d.r, treeColor(d.c, d.bl), s);
-  drawRoads(1); drawCars(1);
-  drawRoads(2); drawCars(2);
+  drawRoads(1); if (!far) drawCars(1);
+  drawRoads(2); if (!far) drawCars(2);
   if (viewMode === 'traffic') drawTrafficOverlay();
   drawParticles();
-  drawBadges(lots);
+  if (!far) drawBadges(lots);
   drawOutStubs();
   drawPreview();
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -4574,11 +4685,12 @@ function sfx(kind) {
 function begin(fn) {
   try { if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { actx = null; }
   fn();
-  cam.x = 420; cam.y = G.hy; cam.z = clamp(Math.min(innerWidth, innerHeight * 1.4) / 520, 0.9, 2.2);
+  cam.x = G.hx + 100; cam.y = G.hy; cam.z = clamp(Math.min(innerWidth, innerHeight * 1.4) / 520, 0.9, 2.2);
   $('intro').hidden = true;
   state = 'play';
   $('cityName').value = G.name;
   $('btnAuto').hidden = G.mode.play !== 'grow';
+  syncFix();
   syncAuto();
   setTool(G.mode.play === 'grow' ? 'inspect' : 'road');
   toast(G.mode.play === 'grow' ? 'This city grows by itself. Speed up time and watch, or build alongside it.' : 'Draw streets off the highway, then paint homes beside them.');
@@ -4669,6 +4781,8 @@ function drawStats() {
 }
 function setRange(v) { statsRange = v; for (const b of document.querySelectorAll('[data-range]')) b.classList.toggle('on', +b.dataset.range === v); drawStats(); }
 for (const b of document.querySelectorAll('[data-range]')) b.addEventListener('click', () => setRange(+b.dataset.range));
+function syncFix() { const on = G && G.autoFix !== false; $('btnFix').classList.toggle('on', on); $('btnFix').setAttribute('aria-pressed', on); $('btnFix').textContent = on ? 'Auto-fix on' : 'Auto-fix off'; }
+$('btnFix').addEventListener('click', () => { G.autoFix = G.autoFix === false; syncFix(); toast(G.autoFix ? 'Traffic engineers will fix jams that last a couple of months.' : 'Automatic traffic fixes are off.'); });
 function syncAuto() { const on = G && G.autoOn !== false; $('btnAuto').textContent = on ? 'Growing' : 'Growth paused'; $('btnAuto').classList.toggle('on', on); }
 $('btnAuto').addEventListener('click', () => { G.autoOn = G.autoOn === false; syncAuto(); toast(G.autoOn ? 'The city is growing by itself again.' : 'Growth paused. You can build by hand meanwhile.'); });
 $('btnStats').addEventListener('click', () => { statsOpen = !statsOpen; $('stats').hidden = !statsOpen; $('btnStats').classList.toggle('on', statsOpen); if (statsOpen) { $('statBody').innerHTML = ''; drawStats(); } });
@@ -4688,6 +4802,7 @@ const MODE_OPTS = [
   ['budget', 'Budget', [['tight', 'Tight', '$10k'], ['normal', 'Normal', '$25k'], ['rich', 'Rich', '$100k'], ['unlimited', 'Unlimited', 'sandbox']]],
   ['traffic', 'Traffic', [['light', 'Light', 'no one leaves'], ['normal', 'Normal', ''], ['rush', 'Rush hour', '×1.5 cars']]],
   ['land', 'Land', [['valley', 'River valley', ''], ['lakes', 'Lakes', ''], ['plains', 'Plains', 'no water']]],
+  ['size', 'Map', [['normal', 'Standard', ''], ['huge', 'Huge', '9× the area']]],
   ['unlockAll', 'Unlocks', [[false, 'Earn them', ''], [true, 'Everything open', '']]],
 ];
 function renderModes() {

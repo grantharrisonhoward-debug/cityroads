@@ -17,8 +17,17 @@ lay themselves out, and every resident's commute has to get through the network 
 - **Region connections.** Named connection points sit around the map edge. The western highway
   starts connected. Linking more of them brings extra jobs for commuters, plus through traffic that
   crosses your city.
-- **Road designer.** Start from a preset (Street, One-way, Avenue, Boulevard, Freeway, Ramp), then
-  fine-tune it:
+- **Road designer.** Start from a preset, then
+  fine-tune it. From smallest to largest, the presets are:
+  - Local street: quiet, narrow and unmarked, with turning circles at dead ends
+  - Street
+  - One-way
+  - Avenue: 2 + 2 lanes
+  - Boulevard: 2 + 2 lanes with a tree-lined median
+  - Freeway
+  - Ramp
+
+  You can adjust:
   - Lanes ahead and back (0 back makes a one-way).
   - Median: none, painted, grass with trees, or concrete barrier.
   - Speed limit from 30 to 120 km/h.
@@ -49,6 +58,14 @@ lay themselves out, and every resident's commute has to get through the network 
 - **Procedural parks.** Each painted park lays out paths from every road entrance to a fountain or
   gazebo, adds a pond with a promenade when it's big enough, and fills in trees, blossom trees,
   flowerbeds, benches, lamps and playgrounds, all growing in with a ripple.
+- **Auto-fix traffic.** The **Auto-fix** button in the top bar is on by default. When a junction
+  or road stays jammed for a couple of months, traffic engineers fix the worst one:
+  - a plain junction gets traffic lights
+  - lights become a roundabout
+  - if neither is possible, the road is widened: local street → street → avenue → grand boulevard
+    (3 + 3 lanes)
+
+  Fixes cost money unless the budget is unlimited. Turn the button off to keep full control.
 - **Traffic decides everything.**
   - Cars plan routes around congestion, queue in lanes and wait at junctions.
   - Long commutes lower demand, cut tax income and eventually make residents abandon their homes.
@@ -64,6 +81,7 @@ When founding a city, pick:
 - **Budget:** Tight ($10k), Normal ($25k), Rich ($100k) or Unlimited (sandbox).
 - **Traffic:** Light (×0.6 cars, and nobody abandons their home), Normal, or Rush hour (×1.5 cars).
 - **Land:** River valley, Lakes, or Plains with no water.
+- **Map:** Standard, or Huge (three times as wide and tall, so 9× the area, with more lakes).
 - **Unlocks:** earn them with population, or start with everything open.
 
 ## Grows by itself
