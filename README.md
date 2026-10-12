@@ -69,13 +69,15 @@ When founding a city, pick:
 ## Grows by itself
 
 In this mode the town plans itself while you watch, the way real cities grow:
-- **An avenue grid.** A gently curving grid of avenues spreads out from the highway, with two
-  boulevards crossing at a grand roundabout in the centre. Where avenues meet, the town builds
-  roundabouts or traffic lights.
+- **Wandering avenues.** Avenues spread out from the highway, each bending its own way, with two
+  boulevards crossing at a grand roundabout in the centre. Some avenues stop at T-junctions, and
+  neighbourhoods meet across a strip of green instead. Where avenues cross, the town builds traffic
+  lights or the occasional roundabout.
 - **Neighbourhoods fill in one at a time.** Each space between avenues gets its own street pattern:
   - a tight grid of small blocks downtown, with shops along the boulevards
-  - regular residential grids
-  - long curving crescents in the suburbs
+  - residential grids where some streets stop at T-junctions
+  - in the suburbs, long curving crescents, loop streets around a central green, and winding
+    streets with cul-de-sacs
   - big plots in industrial districts that cluster away from the centre
 - **Parks where they make sense.** There's a large central park (by a lake when there's one
   nearby), green promenades along the river and lake shores, and a pocket park in most

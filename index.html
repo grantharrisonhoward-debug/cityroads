@@ -1941,10 +1941,18 @@ const ORGANIC_SVC = [['fire', 120], ['school', 220], ['police', 380], ['hospital
 const PU = i => i * SB_A + (i ? (hash(i, 11, G.seed) - 0.5) * 44 : 0);
 const PV = j => j * SB_A + (j ? (hash(j, 13, G.seed) - 0.5) * 44 : 0);
 // the plan's own coordinates (u east-ish, v south-ish) mapped onto the map with a slow, smooth warp
+const lineWob = (i, t, salt) => (vnoise(t * 0.0045 + i * 7.31, i * 3.7 + 0.5, G.seed + salt) - 0.5) * 76;
 function W(u, v) {
   const pl = G.plan, c = Math.cos(pl.th), s = Math.sin(pl.th);
-  const wx = (vnoise(u * 0.0021 + 3.1, v * 0.0021 + 0.7, G.seed + 301) - 0.5) * 80;
-  const wy = (vnoise(u * 0.0021 + 9.4, v * 0.0021 + 5.3, G.seed + 302) - 0.5) * 80;
+  // every avenue wanders on its own, so superblocks come out as irregular shapes rather than squares
+  let i = Math.floor(u / SB_A); if (u < PU(i)) i--; else if (u >= PU(i + 1)) i++;
+  let j = Math.floor(v / SB_A); if (v < PV(j)) j--; else if (v >= PV(j + 1)) j++;
+  const tu = (u - PU(i)) / (PU(i + 1) - PU(i)), tv = (v - PV(j)) / (PV(j + 1) - PV(j));
+  const du = lerp(lineWob(i, v, 311), lineWob(i + 1, v, 311), tu), dv = lerp(lineWob(j, u, 313), lineWob(j + 1, u, 313), tv);
+  u += du; v += dv;
+  // and the whole plan bends slowly across the valley
+  const wx = (vnoise(u * 0.0012 + 3.1, v * 0.0012 + 0.7, G.seed + 301) - 0.5) * 170;
+  const wy = (vnoise(u * 0.0012 + 9.4, v * 0.0012 + 5.3, G.seed + 302) - 0.5) * 170;
   return { x: pl.ox + u * c - v * s + wx, y: pl.oy + u * s + v * c + wy };
 }
 const lineAt = (kind, k, t) => kind === 'u' ? W(PU(k), t) : W(t, PV(k));
@@ -2048,9 +2056,16 @@ function sbReachable(i, j) {
   }
   return false;
 }
+// some avenue segments are never built: neighbourhoods meet across a greenway instead, and the avenues jog and end at T-junctions
+function segOmitted(kind, k, idx) {
+  if ((kind === 'v' && k === 0) || (kind === 'u' && k === 1)) return false;
+  const near = kind === 'u' ? Math.min(sbDist(k - 1, idx), sbDist(k, idx)) : Math.min(sbDist(idx, k - 1), sbDist(idx, k));
+  return near >= 1 && hash(k * 7 + (kind === 'u' ? 1 : 2), idx, G.seed + 55) < 0.22;
+}
 function buildArterial(kind, k, idx) {
   const pl = G.plan, key = kind + k + '_' + idx;
   if (pl.seg[key]) return pl.seg[key] > 0;
+  if (segOmitted(kind, k, idx)) { pl.seg[key] = -2; return false; }
   const pts = arterialPts(kind, k, idx);
   if (!pts) { pl.seg[key] = -1; return false; }
   const main = (kind === 'v' && k === 0) || (kind === 'u' && k === 1);
@@ -2063,7 +2078,7 @@ function setCorner(i, j) {
   const n = nodeNear(W(PU(i), PV(j)), 6);
   if (!n || n.edges.length < 3 || n.ctl !== 'yield' || n.freeway) return;
   const d = Math.max(Math.abs(i - 1), Math.abs(j));
-  n.ctl = d === 0 || d > 1 || hash(i, j, G.seed + 77) < 0.5 ? 'round' : 'lights';
+  n.ctl = d === 0 || hash(i, j, G.seed + 77) < 0.28 ? 'round' : 'lights';
   computeNodes();
   if (n.ctl === 'round') {
     const r = n.r + 10;
@@ -2078,8 +2093,9 @@ function sbStyle(i, j) {
   if (pl.wantStadium && d >= 1 && sbWater(i, j) < 0.05) { pl.wantStadium = false; return 'stadium'; }
   if (d === 0) return 'core';
   if (pl.want === 'ind' && d >= 1) return 'ind';
-  if (d === 1) return h < 0.75 ? 'grid' : 'suburb';
-  return d >= 3 || h < 0.55 ? 'suburb' : 'grid';
+  if (d === 1) return h < 0.55 ? 'grid' : h < 0.8 ? 'loop' : 'suburb';
+  if (d === 2 && h < 0.25) return 'grid';
+  return h < 0.5 ? 'suburb' : h < 0.75 ? 'loop' : 'culs';
 }
 function splitAt(a, b, n, salt) {
   const out = [];
@@ -2099,7 +2115,15 @@ function sbLayout(i, j, style) {
     const along = h < 0.5 ? 'u' : 'v', cross = h2 < 0.65;
     if (along === 'u') { lay.lu = splitAt(u0, u1, 4, i * 7 + 3); lay.lv = cross ? splitAt(v0, v1, 2, j * 7 + 4) : []; }
     else { lay.lv = splitAt(v0, v1, 4, j * 7 + 5); lay.lu = cross ? splitAt(u0, u1, 2, i * 7 + 6) : []; }
-    lay.wave = { axis: along, amp: (h2 < 0.5 ? 1 : -1) * (14 + hash(i, j, G.seed + 9) * 10) };
+    lay.wave = { axis: along, amp: (h2 < 0.5 ? 1 : -1) * (16 + hash(i, j, G.seed + 9) * 16) };
+  } else if (style === 'loop') {
+    // a looping street with a green in the middle, joined to the avenues in two or three places
+    const sides = [0, 1, 2, 3].sort((a, b) => hash(a, i * 9 + j, G.seed + 61) - hash(b, i * 9 + j, G.seed + 61));
+    lay.loop = { rx: 0.26 + h * 0.06, ry: 0.26 + h2 * 0.06, conns: sides.slice(0, h2 < 0.5 ? 2 : 3) };
+  } else if (style === 'culs') {
+    // a winding spine street with cul-de-sacs off both sides
+    lay.spine = lerp(u0, u1, 0.42 + h * 0.16);
+    lay.wave = { axis: 'u', amp: (h2 < 0.5 ? 1 : -1) * (10 + h * 14) };
   }
   lay.bu = [u0, ...lay.lu, u1]; lay.bv = [v0, ...lay.lv, v1];
   return lay;
@@ -2124,10 +2148,51 @@ function buildLocal(pts, spec) {
   for (const p of pts) { if (ok(p)) run.push(p); else flush(); }
   flush();
 }
-function buildLocals(lay, style) {
+// which avenues around a superblock were left out (south, north, west, east)
+function sbOmits(i, j) {
+  const sg = G.plan.seg, o = k => sg[k] === -2;
+  return { s: o('v' + j + '_' + i), n: o('v' + (j + 1) + '_' + i), w: o('u' + i + '_' + j), e: o('u' + (i + 1) + '_' + j) };
+}
+function buildLocals(lay, style, i, j) {
   const spec = style === 'core' || style === 'ind' || style === 'stadium' ? PRESETS.street : HOME_ST;
-  for (const u of lay.lu) { const pts = []; for (let v = lay.v0; ; v = Math.min(lay.v1, v + 6)) { pts.push(sbP(lay, u, v)); if (v >= lay.v1) break; } buildLocal(pts, spec); }
-  for (const v of lay.lv) { const pts = []; for (let u = lay.u0; ; u = Math.min(lay.u1, u + 6)) { pts.push(sbP(lay, u, v)); if (u >= lay.u1) break; } buildLocal(pts, spec); }
+  const om = sbOmits(i, j), TR = 16;
+  const v0 = lay.v0 + (om.s ? TR : 0), v1 = lay.v1 - (om.n ? TR : 0), u0 = lay.u0 + (om.w ? TR : 0), u1 = lay.u1 - (om.e ? TR : 0);
+  const along = (a, b, f, cnt) => { const pts = [], n = cnt || Math.max(2, Math.ceil(Math.abs(b - a) / 6)); for (let q = 0; q <= n; q++) pts.push(f(lerp(a, b, q / n))); return pts; };
+  // a grid where the odd street stops at a T-junction instead of running through
+  const drop = style === 'grid' ? 0.18 : style === 'core' ? 0.08 : style === 'suburb' ? 0.1 : 0;
+  const spans = (cuts, a, b, salt) => {
+    const pts = [a, ...cuts, b], out = [];
+    let start = a;
+    for (let q = 0; q < pts.length - 1; q++) {
+      const cut = pts.length > 2 && hash(q, salt, G.seed + 71) < drop;
+      if (cut) { if (pts[q] > start) out.push([start, pts[q]]); start = pts[q + 1]; }
+    }
+    if (b > start) out.push([start, b]);
+    return out;
+  };
+  lay.lu.forEach((u, q) => { for (const [a, b] of spans(lay.lv, v0, v1, i * 101 + j * 7 + q)) buildLocal(along(a, b, v => sbP(lay, u, v)), spec); });
+  lay.lv.forEach((v, q) => { for (const [a, b] of spans(lay.lu, u0, u1, j * 103 + i * 5 + q + 50)) buildLocal(along(a, b, u => sbP(lay, u, v)), spec); });
+  if (lay.loop) {
+    const L = lay.loop, cu = (lay.u0 + lay.u1) / 2, cv = (lay.v0 + lay.v1) / 2, W2 = lay.u1 - lay.u0, H2 = lay.v1 - lay.v0;
+    const sp = (c, e) => Math.sign(c) * Math.pow(Math.abs(c), e);
+    const at = th => ({ u: cu + W2 * L.rx * sp(Math.cos(th), 0.55), v: cv + H2 * L.ry * sp(Math.sin(th), 0.55) });
+    for (const [a, b] of [[0, Math.PI], [Math.PI, Math.PI * 2]]) buildLocal(along(a, b, th => { const q = at(th); return sbP(lay, q.u, q.v); }, 32), spec);
+    for (const c of L.conns) {
+      if ([om.e, om.n, om.w, om.s][c]) continue;
+      const q = at(c * Math.PI / 2), end = [{ u: lay.u1, v: q.v }, { u: q.u, v: lay.v1 }, { u: lay.u0, v: q.v }, { u: q.u, v: lay.v0 }][c];
+      buildLocal(along(0, 1, t => sbP(lay, lerp(q.u, end.u, t), lerp(q.v, end.v, t)), 10), spec);
+    }
+  }
+  if (lay.spine !== undefined) {
+    buildLocal(along(v0, v1, v => sbP(lay, lay.spine, v)), spec);
+    const n = Math.floor((v1 - v0 - 70) / 46);
+    for (let q = 0; q < n; q++) {
+      const vb = v0 + 50 + q * 46 + (hash(q, i * 13 + j, G.seed + 81) - 0.5) * 10, side = q % 2 ? 1 : -1;
+      const room = side > 0 ? u1 - lay.spine : lay.spine - u0, len = Math.min(68, room - 40);
+      if (len < 26) continue;
+      buildLocal(along(0, len, d => sbP(lay, lay.spine + side * d, vb)), spec);
+    }
+  }
 }
 function paintBlock(lay, ua, ub, va, vb, z, t0) {
   const cu = (ua + ub) / 2, cv = (va + vb) / 2, seen = new Set();
@@ -2192,6 +2257,13 @@ function zoneSuperblock(i, j, sb) {
     }
     paintBlock(lay, ua, ub, va, vb, z, t0);
   }
+  // greenways where an avenue was left out, and a green inside each loop
+  const om = sbOmits(i, j), GW = 13;
+  if (om.s) paintBlock(lay, lay.u0, lay.u1, lay.v0 - 1, lay.v0 + GW, ZP, 0.2);
+  if (om.n) paintBlock(lay, lay.u0, lay.u1, lay.v1 - GW, lay.v1 + 1, ZP, 0.2);
+  if (om.w) paintBlock(lay, lay.u0 - 1, lay.u0 + GW, lay.v0, lay.v1, ZP, 0.2);
+  if (om.e) paintBlock(lay, lay.u1 - GW, lay.u1 + 1, lay.v0, lay.v1, ZP, 0.2);
+  if (lay.loop) { const f = (a, b, t) => lerp(a, b, t); paintBlock(lay, f(lay.u0, lay.u1, 0.4), f(lay.u0, lay.u1, 0.6), f(lay.v0, lay.v1, 0.4), f(lay.v0, lay.v1, 0.6), ZP, 0.3); }
   flushZoneChanges();
   for (const [type, ua, ub, va, vb] of svcList) {
     let done = false;
@@ -2237,7 +2309,7 @@ function stepSuperblock() {
     buildArterial('v', j, i); buildArterial('v', j + 1, i); buildArterial('u', i, j); buildArterial('u', i + 1, j);
     sb.st = 1; c.stage = 1;
   } else if (c.stage === 1) {
-    buildLocals(sb.lay, sb.style);
+    buildLocals(sb.lay, sb.style, i, j);
     for (const [a, b] of [[i, j], [i + 1, j], [i, j + 1], [i + 1, j + 1]]) setCorner(a, b);
     sb.st = 2; c.stage = 2;
   } else {
