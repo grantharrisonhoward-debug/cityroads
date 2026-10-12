@@ -25,6 +25,8 @@
   --park: #2f8f50;
   --shadow: 0 6px 22px rgba(30, 36, 43, 0.14);
   --scrim: rgba(211, 219, 191, 0.7);
+  --series-1: #2a78d6;
+  --grid: #e3e6db;
   --f-display: "Familjen Grotesk", "Helvetica Neue", Arial, sans-serif;
   --f-body: "IBM Plex Sans", system-ui, -apple-system, sans-serif;
   --f-mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
@@ -34,7 +36,7 @@
     --bg: #1d2420; --panel: #20262c; --panel-2: #2a3138; --ink: #eef1e8; --muted: #a2aa9e; --line: #343c43;
     --sign: #f2bd45; --sign-ink: #1e242b; --danger: #ef6a5e;
     --res: #62c277; --com: #9a90f0; --ind: #efad48; --park: #4fb06f;
-    --shadow: 0 6px 22px rgba(0, 0, 0, 0.45); --scrim: rgba(18, 22, 20, 0.72);
+    --shadow: 0 6px 22px rgba(0, 0, 0, 0.45); --scrim: rgba(18, 22, 20, 0.72); --series-1: #3987e5; --grid: #343c43;
     color-scheme: dark;
   }
 }
@@ -42,7 +44,7 @@
   --bg: #1d2420; --panel: #20262c; --panel-2: #2a3138; --ink: #eef1e8; --muted: #a2aa9e; --line: #343c43;
   --sign: #f2bd45; --sign-ink: #1e242b; --danger: #ef6a5e;
   --res: #62c277; --com: #9a90f0; --ind: #efad48; --park: #4fb06f;
-  --shadow: 0 6px 22px rgba(0, 0, 0, 0.45); --scrim: rgba(18, 22, 20, 0.72);
+  --shadow: 0 6px 22px rgba(0, 0, 0, 0.45); --scrim: rgba(18, 22, 20, 0.72); --series-1: #3987e5; --grid: #343c43;
   color-scheme: dark;
 }
 * { box-sizing: border-box; }
@@ -162,6 +164,12 @@ body { background: var(--bg); color: var(--ink); font-family: var(--f-body); fon
 .cardhead { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 12px; }
 .cardhead h2 { font: 700 28px var(--f-display); margin: 0; }
 .hint-s { font-size: 12.5px; color: var(--muted); align-self: center; }
+.modes { display: grid; grid-template-columns: auto 1fr; gap: 6px 10px; align-items: center; width: 100%; margin-bottom: 4px; }
+.modes .ml { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+.modes .mo { display: flex; flex-wrap: wrap; gap: 4px; min-width: 0; }
+.modes button { border: 0; border-radius: 8px; padding: 6px 10px; font: 600 12.5px var(--f-body); background: var(--panel-2); color: var(--ink); cursor: pointer; }
+.modes button.on { background: var(--ink); color: var(--panel); }
+.modes button small { font: 500 10.5px var(--f-mono); opacity: 0.7; margin-left: 3px; }
 .citylist { display: flex; flex-direction: column; gap: 6px; }
 .citylist .empty { margin: 0; font-size: 13.5px; }
 .cityrow { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; background: var(--panel-2); border-radius: 12px; padding: 10px 12px; }
@@ -171,6 +179,30 @@ body { background: var(--bg); color: var(--ink); font-family: var(--f-body); fon
 .cityrow .ci small { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
 .cityrow .ca { display: flex; gap: 6px; }
 .citiesbtn { font: 600 13px var(--f-body); border: 0; border-radius: 9px; padding: 7px 12px; background: var(--panel-2); color: var(--ink); cursor: pointer; }
+.row2 { flex-direction: row; gap: 4px; align-items: center; }
+#stats { position: fixed; right: 12px; top: calc(92px + env(safe-area-inset-top, 0px)); width: 340px; max-width: calc(100% - 24px); max-height: calc(100% - 230px); overflow-y: auto;
+  background: var(--panel); border-radius: 16px; box-shadow: var(--shadow); padding: 14px 14px 10px; z-index: 7; }
+#stats[hidden] { display: none !important; }
+.sthead { display: flex; justify-content: space-between; align-items: center; }
+.sthead h2 { font: 700 20px var(--f-display); margin: 0; }
+.stctl { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin: 10px 0 6px; }
+.seg.flat { box-shadow: none; background: var(--panel-2); }
+.stat { padding: 8px 0 4px; border-top: 1px solid var(--line); position: relative; }
+.stat:first-child { border-top: 0; }
+.stat .sh { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.stat .sh span { font-size: 12px; font-weight: 600; color: var(--muted); }
+.stat .sh b { font: 600 17px var(--f-mono); font-variant-numeric: tabular-nums; }
+.stat .sh small { font: 500 11px var(--f-mono); color: var(--muted); margin-left: 6px; }
+.stat canvas { display: block; width: 100%; height: 86px; cursor: crosshair; }
+.stempty { color: var(--muted); font-size: 13px; margin: 8px 0; }
+#statTip { position: absolute; pointer-events: none; background: var(--ink); color: var(--panel); border-radius: 8px; padding: 5px 8px; font: 500 12px var(--f-body); white-space: nowrap; z-index: 2; }
+#statTip b { font-family: var(--f-mono); }
+.sttable { width: 100%; border-collapse: collapse; font-size: 12px; font-variant-numeric: tabular-nums; }
+.sttable th, .sttable td { text-align: right; padding: 4px 4px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.sttable th:first-child, .sttable td:first-child { text-align: left; }
+.sttable th { color: var(--muted); font-weight: 600; }
+.sttablewrap { overflow-x: auto; }
+.citiesbtn.on, .btn.sm.on { background: var(--ink); color: var(--panel); }
 .citiesbtn:hover { background: var(--sign); color: var(--sign-ink); }
 
 @media (max-width: 640px) {
@@ -203,13 +235,14 @@ body { background: var(--bg); color: var(--ink); font-family: var(--f-body); fon
       <div class="meter"><div class="track"><div class="fill" id="dC" style="background:var(--com)"></div></div><span>C</span></div>
       <div class="meter"><div class="track"><div class="fill" id="dI" style="background:var(--ind)"></div></div><span>I</span></div>
     </div>
-    <div class="cell"><button id="btnCities" class="citiesbtn" title="Save, load or start cities">Cities</button></div>
+    <div class="cell row2"><button id="btnCities" class="citiesbtn" title="Save, load or start cities">Cities</button><button id="btnStats" class="citiesbtn" title="Graphs of how the city is doing">Stats</button></div>
     <div class="cell"><label id="sDate">Jan 2026</label>
       <div class="speeds">
         <button id="sp0" title="Pause (Space)" aria-label="Pause">II</button>
         <button id="sp1" title="Normal speed" aria-label="Normal speed">1×</button>
         <button id="sp2" title="Fast" aria-label="Fast">2×</button>
-        <button id="sp3" title="Fastest" aria-label="Fastest">4×</button>
+        <button id="sp3" title="Fast" aria-label="Four times speed">4×</button>
+        <button id="sp4" title="Super fast" aria-label="Ten times speed">10×</button>
       </div>
     </div>
   </div>
@@ -267,6 +300,14 @@ body { background: var(--bg); color: var(--ink); font-family: var(--f-body); fon
       <button data-brush="2">L</button>
       <button data-brush="fill" title="Fill the area enclosed by roads">Fill area</button>
     </div>
+    <div class="seg" id="placeOpts" hidden>
+      <span class="lab">Place</span>
+      <button data-svc="stadium">Stadium <small>$20k</small></button>
+      <button data-svc="hospital">Hospital <small>$12k</small></button>
+      <button data-svc="school">School <small>$7k</small></button>
+      <button data-svc="fire">Fire station <small>$4k</small></button>
+      <button data-svc="police">Police <small>$4k</small></button>
+    </div>
     <div class="seg" id="dozeOpts" hidden>
       <span class="lab">Bulldoze</span>
       <button data-doze="0">Small</button>
@@ -298,13 +339,28 @@ body { background: var(--bg); color: var(--ink); font-family: var(--f-body); fon
     <button class="tool" data-tool="zone" title="Zoning (4)">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M4 7c3-3 7-3 9 0s6 3 7 0v10c-1 3-5 3-7 0s-6-3-9 0z"/></svg>
       <span class="nm"><i class="sw" style="background:var(--res)"></i><i class="sw" style="background:var(--com)"></i><i class="sw" style="background:var(--ind)"></i>Zoning</span><span class="pr">free</span></button>
+    <button class="tool" data-tool="place" title="Places: stadiums, schools and more (5)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="12" rx="9" ry="6.5"/><rect x="8" y="9.5" width="8" height="5" rx="1"/></svg>
+      <span class="nm">Places</span><span class="pr">from $4k</span></button>
     <span class="sep"></span>
-    <button class="tool" data-tool="doze" title="Bulldoze (5)">
+    <button class="tool" data-tool="doze" title="Bulldoze (6)">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"><path d="M3 16h11l2-6h-5l-1-4H5v10"/><circle cx="6.5" cy="18.5" r="2"/><circle cx="12.5" cy="18.5" r="2"/><path d="M16 10l5 2v6"/></svg>
       <span class="nm">Bulldoze</span><span class="pr">roads · zones</span></button>
   </div>
 </div>
 
+<aside id="stats" hidden aria-label="City stats">
+  <div class="sthead">
+    <h2>City stats</h2>
+    <button class="btn sm" id="btnCloseStats">Close</button>
+  </div>
+  <div class="stctl">
+    <div class="seg flat" id="rangeSeg"><button data-range="12">1 yr</button><button data-range="60">5 yr</button><button data-range="0">All</button></div>
+    <button class="btn sm" id="btnStatTable" aria-pressed="false">Table</button>
+  </div>
+  <div id="statBody"></div>
+  <div id="statTip" hidden></div>
+</aside>
 <div id="tip" hidden></div>
 <div id="toasts" aria-live="polite"></div>
 
@@ -322,6 +378,7 @@ body { background: var(--bg); color: var(--ink); font-family: var(--f-body); fon
       <dt>Camera</dt><dd>Scroll or pinch to zoom. Right-drag, Space-drag or WASD to pan.</dd>
     </dl>
     <div class="actions">
+      <div class="modes" data-modes></div>
       <input id="introName" class="namefield" aria-label="Name for the new city" maxlength="18">
       <button class="btn primary" id="btnNew">Found a new city</button>
     </div>
@@ -338,6 +395,7 @@ body { background: var(--bg); color: var(--ink); font-family: var(--f-body); fon
       <span class="hint-s">Cities also save automatically. Ctrl+S saves too.</span>
     </div>
     <h3 class="sub-h">Start a new city</h3>
+    <div class="modes" data-modes></div>
     <div class="actions">
       <input id="newName" class="namefield" aria-label="Name for the new city" maxlength="18">
       <button class="btn" id="btnNewCity">Found it</button>
@@ -355,7 +413,7 @@ body { background: var(--bg); color: var(--ink); font-family: var(--f-body); fon
 // constants
 // =====================================================================
 const WW = 2000, WH = 1400, CELL = 10, CW = WW / CELL, CH = WH / CELL, NC = CW * CH;
-const ZR = 2, ZC = 3, ZI = 4, ZP = 5, ZK = 6;
+const ZR = 2, ZC = 3, ZI = 4, ZP = 5, ZK = 6, ZS = 7;
 // Roads are described by a spec: lanes each way, median, speed limit and whether buildings may front onto it.
 const LANE_W = 4.5;
 const MEDIANS = { none: { name: 'None', w: 0, cost: 0 }, paint: { name: 'Painted', w: 1.2, cost: 0.3 }, grass: { name: 'Grass', w: 6, cost: 1.5 }, barrier: { name: 'Barrier', w: 1.6, cost: 1.5 } };
@@ -509,9 +567,14 @@ let particles = [], parks = [], animCells = [];
 let lotArr = [], lotsDirty = true, parksDirty = false, parksTimer = 0, bakeTimer = -1;
 const lists = { homes: null, jobs: null, shops: null, factories: null };
 
-function newCity(seed) {
+// options picked when founding a city
+const BUDGETS = { tight: 10000, normal: 25000, rich: 100000, unlimited: 1e9 };
+const TRAFFIC_MULT = { light: 0.6, normal: 1, rush: 1.5 };
+const DEFAULT_MODE = { budget: 'normal', traffic: 'normal', land: 'valley', unlockAll: false };
+function newCity(seed, mode) {
+  mode = { ...DEFAULT_MODE, ...(mode || {}) };
   return {
-    seed, name: 'Riverton', money: 25000, time: 0, month: 0, monthAcc: 0, net: 0, milestone: 0,
+    seed, mode, hist: [], name: 'Riverton', money: BUDGETS[mode.budget] || 25000, time: 0, month: 0, monthAcc: 0, net: 0, milestone: 0,
     pop: 0, jc: 0, ji: 0, demand: { r: 1, c: 0, i: 0.5 }, flow: 100, commute: 1, speed: 1,
     nodes: new Map(), edges: new Map(), lots: new Map(), nextId: 1, cars: [],
     zone: new Uint8Array(NC), zoneT: new Float32Array(NC).fill(-99), trees: [], river: [], lakes: [],
@@ -523,16 +586,20 @@ function newCity(seed) {
 function genTerrain(g) {
   const s = g.seed, rnd = mulberry(s);
   g.hy = Math.round(WH * 0.5 + (rnd() - 0.5) * 240);
-  const bx = WW * (0.6 + rnd() * 0.08), ph = rnd() * 6.28;
-  for (let y = -60; y <= WH + 60; y += 20)
-    g.river.push({ x: bx + Math.sin(y * 0.0035 + ph) * 120 + (vnoise(y * 0.01, 1.5, s) - 0.5) * 110, y, w: 34 + vnoise(y * 0.006, 7.7, s) * 36 });
-  let lx = 380 + rnd() * 520, ly = 160 + rnd() * (WH - 320);
-  if (Math.abs(ly - g.hy) < 220) ly = g.hy + (ly < g.hy ? -280 : 280);
-  ly = clamp(ly, 120, WH - 120);
-  for (let k = 0; k < 8; k++) {
-    const a = k / 8 * Math.PI * 2 + rnd(), d = rnd() * 46;
-    g.lakes.push({ x: lx + Math.cos(a) * d, y: ly + Math.sin(a) * d * 0.7, r: 30 + rnd() * 34 });
-  }
+  const bx = WW * (0.6 + rnd() * 0.08), ph = rnd() * 6.28, land = (g.mode && g.mode.land) || 'valley';
+  if (land === 'valley')
+    for (let y = -60; y <= WH + 60; y += 20)
+      g.river.push({ x: bx + Math.sin(y * 0.0035 + ph) * 120 + (vnoise(y * 0.01, 1.5, s) - 0.5) * 110, y, w: 34 + vnoise(y * 0.006, 7.7, s) * 36 });
+  const lake = (lx, ly, scale) => {
+    if (Math.abs(ly - g.hy) < 220 && lx < 900) ly = g.hy + (ly < g.hy ? -280 : 280);
+    ly = clamp(ly, 120, WH - 120);
+    for (let k = 0; k < 8; k++) {
+      const a = k / 8 * Math.PI * 2 + rnd(), d = rnd() * 46 * scale;
+      g.lakes.push({ x: lx + Math.cos(a) * d, y: ly + Math.sin(a) * d * 0.7, r: (30 + rnd() * 34) * scale });
+    }
+  };
+  if (land === 'valley') lake(380 + rnd() * 520, 160 + rnd() * (WH - 320), 1);
+  else if (land === 'lakes') { lake(500 + rnd() * 300, 200 + rnd() * 300, 1.2); lake(1200 + rnd() * 400, 300 + rnd() * 600, 1.6); lake(800 + rnd() * 500, 900 + rnd() * 300, 1); }
   buildWater(g);
   for (let gy = 0; gy < WH / 12; gy++) for (let gx = 0; gx < WW / 12; gx++) {
     const x = gx * 12 + hash(gx, gy, s) * 9, y = gy * 12 + hash(gy, gx, s + 1) * 9;
@@ -1052,7 +1119,7 @@ function attachLot(l) {
   l.avenue = !!(h && h.e.S.lanes >= 4);
 }
 function reattachAll() {
-  for (const l of [...G.lots.values()]) { attachLot(l); if (!l.attach && !l.b) removeLot(l, false); }
+  for (const l of [...G.lots.values()]) { attachLot(l); if (!l.attach && !l.b && l.z !== ZS) removeLot(l, false); }
 }
 
 function genLotsAlong(e) {
@@ -1095,7 +1162,7 @@ function genLotsIn(x0, y0, x1, y1) {
   }
 }
 function validateLotsIn(x0, y0, x1, y1) {
-  forLotsIn(x0, y0, x1, y1, l => { if (!lotZoneOK(l, false)) removeLot(l, true); });
+  forLotsIn(x0, y0, x1, y1, l => { if (l.z !== ZS && !lotZoneOK(l, false)) removeLot(l, true); });
 }
 
 // ---------- procedural buildings ----------
@@ -1109,6 +1176,100 @@ function maxLevel(l) {
   return l.w >= 28 && l.d >= 28 ? 3 : 2;
 }
 
+// ---------- city services you can place ----------
+const SERVICES = {
+  stadium:  { name: 'Stadium', w: 80, d: 64, cost: 20000, up: 45, jobs: 30, r: 6, lv: 10, rdem: 0.05, note: 'Match days pull big crowds across your roads.' },
+  hospital: { name: 'Hospital', w: 46, d: 36, cost: 12000, up: 30, jobs: 45, r: 4, lv: 10, rdem: 0.1, note: 'Raises land value and draws residents.' },
+  school:   { name: 'School', w: 44, d: 34, cost: 7000, up: 20, jobs: 18, r: 4, lv: 12, rdem: 0.12, note: 'Families want to live nearby.' },
+  fire:     { name: 'Fire station', w: 26, d: 22, cost: 4000, up: 12, jobs: 10, r: 3, lv: 6, rdem: 0.03, note: 'Makes the neighbourhood feel safer.' },
+  police:   { name: 'Police station', w: 26, d: 22, cost: 4000, up: 12, jobs: 10, r: 3, lv: 6, rdem: 0.03, note: 'Makes the neighbourhood feel safer.' },
+};
+function makeService(l) {
+  const S = SERVICES[l.svc], w = l.w, d = l.d, fy = -d / 2, parts = [];
+  const r = mulberry(l.seed * 3 + 7);
+  const b = { level: 1, parts, born: G.time, happy: 1, noRoute: 0, bad: 0, abandoned: false, svc: true, jobs: S.jobs };
+  const box = (x, y, bw, bh, H, roof, c, dl) => parts.push({ t: 'box', x, y, w: bw, h: bh, H, roof, c, d: dl || 0 });
+  const tree = (x, y, rr) => parts.push({ t: 'tree', x, y, r: rr, c: (r() * 4) | 0, bl: false, d: 0.6 + r() * 0.3 });
+  parts.push({ t: 'yard', x: 0, y: 0, w: w - 1, h: d - 1, c: l.svc === 'school' ? 'r' : 'pave' });
+  if (l.svc === 'stadium') {
+    parts.push({ t: 'lot', x: 0, y: fy + 7.4, w: w - 3, h: 13 });
+    const ry = (d - 19) / 2, rx = (w - 8) / 2;
+    parts.push({ t: 'oval', x: 0, y: d / 2 - 1.5 - ry, rx, ry, H: 14, c: (r() * 4) | 0, d: 0 });
+    for (const [mx, my] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) parts.push({ t: 'mast', x: mx * (rx + 1.2), y: d / 2 - 1.5 - ry + my * (ry + 0.5), d: 0.4 });
+  } else if (l.svc === 'hospital') {
+    parts.push({ t: 'lot', x: -w * 0.18, y: fy + 6.2, w: w * 0.6, h: 10.4 });
+    box(w * 0.08, 4, w * 0.62, d * 0.46, 20, 'flat', '#eef0f2');
+    box(-w * 0.3, 7, w * 0.26, d * 0.36, 12, 'flat', '#e3e6ea', 0.15);
+    parts.push({ t: 'cross', x: w * 0.08, y: 4, d: 0.35 });
+    parts.push({ t: 'heli', x: w * 0.36, y: fy + 6, d: 0.3 });
+    parts.push({ t: 'pcar', x: -w * 0.32, y: fy + 4, a: Math.PI / 2, c: 4, truck: true, d: 0.6 });
+    tree(-w / 2 + 3, d / 2 - 3, 2.6); tree(w / 2 - 3, d / 2 - 3, 2.4);
+  } else if (l.svc === 'school') {
+    box(-w * 0.18, fy + 4 + d * 0.16, w * 0.56, d * 0.3, 9, 'hip', '#c46b4f');
+    box(-w * 0.38, fy + 4 + d * 0.42, w * 0.16, d * 0.34, 8, 'hip', '#c46b4f', 0.12);
+    parts.push({ t: 'field', x: w * 0.27, y: 2, w: w * 0.4, h: d * 0.8, d: 0.3 });
+    parts.push({ t: 'lot', x: -w * 0.15, y: d / 2 - 5.5, w: w * 0.5, h: 8 });
+    for (let k = 0; k < 4; k++) tree(-w / 2 + 3 + k * 6, fy + 1.8, 1.8);
+  } else {
+    const fire = l.svc === 'fire';
+    box(-w * 0.12, 2, w * 0.66, d * 0.62, 8, 'flat', fire ? '#c0453b' : '#3d5a8a');
+    parts.push({ t: 'drive', x: -w * 0.12, y: fy + 3, w: w * 0.6, h: 5 });
+    for (let k = 0; k < 2; k++) parts.push({ t: 'pcar', x: -w * 0.28 + k * w * 0.3, y: fy + 3.4, a: Math.PI / 2, c: fire ? 0 : 1, truck: fire, d: 0.5 });
+    parts.push({ t: 'sign', x: w / 2 - 3, y: fy + 2, c: fire ? 0 : 1, d: 0.4 });
+    tree(w / 2 - 3.5, d / 2 - 4, 2.4);
+  }
+  return b;
+}
+// footprint for a service at (x, y), turned to face the nearest road
+function serviceCandidate(x, y, type) {
+  const S = SERVICES[type];
+  const h = nearestRoad(x, y, 90, (e, i) => !e.S.noFront && Math.abs(e.pts[i].z) < 0.3);
+  let l;
+  if (h) {
+    const f = pointAt(h.e, h.s), side = (x - h.x) * f.nx + (y - h.y) * f.ny >= 0 ? 1 : -1;
+    const hw = h.e.S.w / 2 + side * h.e.S.co, off = hw + 2.4 + S.d / 2;
+    l = { x: h.x + f.nx * side * off, y: h.y + f.ny * side * off, xa: { x: f.tx, y: f.ty }, ya: { x: f.nx * side, y: f.ny * side }, w: S.w, d: S.d, z: ZS, svc: type };
+  } else l = { x, y, xa: { x: 1, y: 0 }, ya: { x: 0, y: 1 }, w: S.w, d: S.d, z: ZS, svc: type };
+  let why = h ? null : 'Needs a road next to it';
+  if (!why) {
+    for (const fx of [-0.48, 0, 0.48]) for (const fyy of [-0.48, 0, 0.48]) {
+      const [wx, wy] = toWorld(l, fx * l.w, fyy * l.d);
+      if (waterAt(wx, wy)) why = 'Can’t build on water';
+      if (wx < 5 || wy < 5 || wx > WW - 5 || wy > WH - 5) why = 'Too close to the edge of the map';
+    }
+  }
+  if (!why) {
+    const rr = Math.hypot(l.w, l.d) / 2 + 12;
+    forRoadPts(l.x - rr, l.y - rr, l.x + rr, l.y + rr, (e, i) => {
+      const p = e.pts[i];
+      if (why || p.z < -0.3) return;
+      const [lx, ly] = toLocal(l, p.x + e.nrm[i].x * e.S.co, p.y + e.nrm[i].y * e.S.co);
+      if (Math.abs(lx) < l.w / 2 + e.S.w / 2 + 0.5 && Math.abs(ly) < l.d / 2 + e.S.w / 2 + 0.5) why = 'A road is in the way';
+    });
+    forLotsIn(l.x - rr, l.y - rr, l.x + rr, l.y + rr, o => { if (!why && o.z === ZS && lotsOverlap(l, o, 0.4)) why = 'Overlaps another building'; });
+  }
+  return { l, why };
+}
+function placeService(x, y, type) {
+  const S = SERVICES[type], { l, why } = serviceCandidate(x, y, type);
+  if (why) { toast(why + '.', 'bad'); return false; }
+  if (S.cost > G.money) { toast(`Not enough funds: a ${S.name.toLowerCase()} costs $${fmt(S.cost)}`, 'bad'); return false; }
+  G.money -= S.cost;
+  const rr = Math.hypot(l.w, l.d) / 2 + 2;
+  forLotsIn(l.x - rr, l.y - rr, l.x + rr, l.y + rr, o => { if (lotsOverlap(l, o, 0)) removeLot(o, true); });
+  fellTrees((tx, ty) => pointInLot(l, tx, ty, 1), l.x - rr, l.y - rr, l.x + rr, l.y + rr);
+  rebuildTreeGrid();
+  const lot = addLot(l);
+  lot.svc = type;
+  lot.b = makeService(lot);
+  puff(lot.x, lot.y, 'dust', 14);
+  particles.push({ x: lot.x, y: lot.y, life: 0, max: 0.9, kind: 'ring', size: rr });
+  sfx('build');
+  toast(`${S.name} built for $${fmt(S.cost)}. ${S.note}`, 'good');
+  if (type === 'stadium' && !G.evNext) G.evNext = G.time + 25;
+  changed();
+  return true;
+}
 function makeBuilding(l, level) {
   const r = mulberry(l.seed * 7 + level * 1013), parts = [];
   const w = l.w, d = l.d, fy = -d / 2;
@@ -1597,20 +1758,21 @@ function pickW(L) {
   return L.items[lo];
 }
 function census() {
-  let pop = 0, jc = 0, ji = 0;
+  let pop = 0, jc = 0, ji = 0, svcR = 0;
   const homes = [], jobs = [], shops = [], fac = [];
   for (const l of G.lots.values()) {
     const b = l.b;
     if (!b || b.abandoned) continue;
     if (l.z === ZR) { const n = RES_CAP(l); pop += n; homes.push({ l, w: n }); }
     else if (l.z === ZC) { const n = Math.round(COM_JOBS(l) * (1 + Math.min(0.4, parkAt(l.x, l.y) * 0.04))); jc += n; jobs.push({ l, w: n }); shops.push({ l, w: n }); }
+    else if (l.z === ZS) { const n = b.jobs || 10; jc += n; jobs.push({ l, w: n }); svcR += SERVICES[l.svc].rdem; }
     else { const n = IND_JOBS(l); ji += n; jobs.push({ l, w: n }); fac.push({ l, w: n }); }
   }
   G.pop = pop; G.jc = jc; G.ji = ji;
   lists.homes = weighted(homes); lists.jobs = weighted(jobs); lists.shops = weighted(shops); lists.factories = weighted(fac);
   const work = jc + ji;
   const jam = clamp((G.commute - 1.5) * 0.8, 0, 1.3);
-  G.demand.r = clamp(clamp((work + outJobs() - pop * 0.5) / Math.max(30, pop * 0.25), -1, 1) - jam, -1, 1);
+  G.demand.r = clamp(Math.min(0.35, svcR) + clamp((work + outJobs() - pop * 0.5) / Math.max(30, pop * 0.25), -1, 1) - jam, -1, 1);
   G.demand.c = clamp(clamp((pop * 0.16 - jc + 4) / Math.max(12, pop * 0.07), -1, 1) - jam * 0.5, -1, 1);
   G.demand.i = clamp(clamp((pop * 0.22 - ji + 12) / Math.max(15, pop * 0.1), -1, 1) - jam * 0.3, -1, 1);
 }
@@ -1647,8 +1809,10 @@ function computeLV() {
     forLotsIn(k.cx - 150, k.cy - 150, k.cx + 150, k.cy + 150, l => { if (l.z === ZC && l.b && !l.b.abandoned) jobs += COM_JOBS(l); });
     k.occ = clamp(0.12 + jobs / 140, 0.12, 0.92);
   }
+  const svcB = new Float32Array(LW * LH);
   for (const l of G.lots.values()) {
     if (!l.b || l.b.abandoned) continue;
+    if (l.z === ZS) { const S = SERVICES[l.svc]; splat(svcB, l.x, l.y, S.r, S.lv); if (l.svc === 'stadium') splat(noise, l.x, l.y, 2, 4); continue; }
     if (l.z === ZC) splat(com, l.x, l.y, 2, l.b.level * 1.5);
     else if (l.z === ZI) splat(pollGrid, l.x, l.y, 4, l.b.level * 7);
   }
@@ -1660,7 +1824,7 @@ function computeLV() {
   }
   lvGrid = new Float32Array(LW * LH);
   for (let i = 0; i < LW * LH; i++)
-    lvGrid[i] = clamp(30 + Math.min(40, park[i]) + Math.min(14, wat[i]) + Math.min(14, com[i]) - Math.min(60, pollGrid[i]) * 0.8 - Math.min(22, noise[i]), 0, 100);
+    lvGrid[i] = clamp(30 + Math.min(22, svcB[i]) + Math.min(40, park[i]) + Math.min(14, wat[i]) + Math.min(14, com[i]) - Math.min(60, pollGrid[i]) * 0.8 - Math.min(22, noise[i]), 0, 100);
   bakeOverlay();
 }
 const overlayLayer = document.createElement('canvas');
@@ -1687,7 +1851,7 @@ function growTick() {
   let felled = false;
   for (let k = 0; k < n; k++) {
     const l = lotArr[(Math.random() * lotArr.length) | 0];
-    if (!G.lots.has(l.id)) continue;
+    if (!G.lots.has(l.id) || l.z === ZS) continue;
     const d = dem[l.z];
     if (!l.b) {
       if (l.attach && d > 0 && Math.random() < 0.08 + 0.4 * d) {
@@ -1707,7 +1871,7 @@ function growTick() {
     if (l.z === ZR) {
       const sad = b.happy > 2.6 || b.noRoute > 4 || !l.attach;
       b.bad = sad ? b.bad + 0.4 : Math.max(0, b.bad - 0.8);
-      if (b.bad > 30) { b.abandoned = true; b.abTime = G.time; toastOnce('abandon', 'People are leaving homes with terrible commutes. Check the Traffic view.', 'bad'); continue; }
+      if (b.bad > 30 && G.mode.traffic !== 'light') { b.abandoned = true; b.abTime = G.time; toastOnce('abandon', 'People are leaving homes with terrible commutes. Check the Traffic view.', 'bad'); continue; }
     }
     if (b.level < maxLevel(l) && d > 0.05 && lvAt(l.x, l.y) + (l.avenue ? 8 : 0) + (l.z === ZC ? Math.min(10, parkAt(l.x, l.y) * 0.6) : 0) >= LVTH[l.z][b.level + 1] && b.happy < 2 && Math.random() < 0.03 + 0.08 * d) {
       const old = b;
@@ -1734,6 +1898,7 @@ function growTick() {
 
 function endOfMonth() {
   G.month++;
+  recordHistory();
   const eff = 0.55 + 0.45 * clamp(G.flow / 100, 0, 1);
   const income = Math.round((G.pop * 1.0 + (G.jc + G.ji) * 0.7) * eff);
   let upkeep = 0;
@@ -1742,6 +1907,7 @@ function endOfMonth() {
   let parkCells = 0;
   for (let c = 0; c < NC; c++) if (G.zone[c] === ZP) parkCells++;
   upkeep += parkCells * 0.05;
+  for (const l of G.lots.values()) if (l.z === ZS) upkeep += SERVICES[l.svc].up;
   G.net = income - Math.round(upkeep);
   G.money += G.net;
   while (G.milestone < MILESTONES.length && G.pop >= MILESTONES[G.milestone]) {
@@ -1751,6 +1917,39 @@ function endOfMonth() {
   }
   checkUnlocks();
   if (G.month % 3 === 0) save(false);
+}
+// match days: crowds drive to the stadium, then all leave together
+function stepEvents(dt) {
+  if (!G.evNext || G.time < 5) return;
+  const ev = G.ev;
+  if (!ev && G.time >= G.evNext) {
+    const st = [...G.lots.values()].filter(l => l.svc === 'stadium' && l.attach && l.b);
+    if (!st.length) { G.evNext = G.time + 30; return; }
+    const l = st[(Math.random() * st.length) | 0];
+    G.ev = { lot: l.id, t0: G.time, acc: 0 };
+    toast('Match day at the stadium. Expect heavy traffic around it.');
+    return;
+  }
+  if (!ev) return;
+  const l = G.lots.get(ev.lot);
+  if (!l || !l.attach || !lists.homes || !lists.homes.total) { G.ev = null; G.evNext = G.time + 50; return; }
+  const t = G.time - ev.t0, crowd = Math.min(5, 1.5 + G.pop / 400);
+  if (t > 55) { G.ev = null; G.evNext = G.time + 45 + Math.random() * 25; return; }
+  if (t > 25 && t < 32) return; // the match itself
+  ev.acc += dt * crowd;
+  while (ev.acc >= 1 && G.cars.length < MAX_CARS) {
+    ev.acc--;
+    const h = pickW(lists.homes);
+    if (!h || !h.l.attach) continue;
+    const home = { e: h.l.attach.e, s: h.l.attach.s }, stad = { e: l.attach.e, s: l.attach.s };
+    const ok = t < 25 ? spawnCar(home, stad, null, false) : spawnCar(stad, home, null, false);
+    if (ok) G.cars[G.cars.length - 1].thru = true;
+  }
+}
+function recordHistory() {
+  G.hist.push({ m: G.month, pop: G.pop, jobs: G.jc + G.ji, money: Math.round(G.money), net: G.net, flow: Math.round(G.flow), commute: Math.round(G.commute * 100) / 100, cars: G.cars.length });
+  if (G.hist.length > 1200) G.hist.splice(0, G.hist.length - 1200);
+  if (statsOpen) drawStats();
 }
 function checkUnlocks() {
   const un = (key, cond, msg) => { if (!G.unlocked[key] && cond) { G.unlocked[key] = true; toast(msg, 'good'); syncLocks(); } };
@@ -2115,10 +2314,12 @@ function update(dt) {
   if (G.growAcc >= 0.4) { G.growAcc = 0; growTick(); }
   G.lvAcc += dt;
   if (G.lvAcc >= 2) { G.lvAcc = 0; computeLV(); }
-  G.tripAcc += dt * Math.min(14, G.pop / 110);
+  if (G.mode.budget === 'unlimited') G.money = 1e9;
+  G.tripAcc += dt * Math.min(14, G.pop / 110) * (TRAFFIC_MULT[G.mode.traffic] || 1);
   while (G.tripAcc >= 1) { G.tripAcc--; if (G.cars.length < MAX_CARS) commuteTrip(); }
   G.truckAcc += dt * Math.min(3, G.ji / 220);
   while (G.truckAcc >= 1) { G.truckAcc--; if (G.cars.length < MAX_CARS) truckTrip(); }
+  stepEvents(dt);
   if (connectedOuts().length >= 2) {
     G.thruAcc += dt * Math.min(3, 0.3 + G.month * 0.012 + G.pop / 2500);
     while (G.thruAcc >= 1) { G.thruAcc--; if (G.cars.length < MAX_CARS) thruTrip(); }
@@ -2140,10 +2341,10 @@ function serialize() {
   G.trees.forEach((t, i) => { alive[i] = t.alive ? 1 : 0; });
   return {
     v: 4, slot: G.slot, seed: G.seed, name: G.name, money: G.money, time: G.time, month: G.month, monthAcc: G.monthAcc, net: G.net, milestone: G.milestone,
-    unlocked: G.unlocked, outs: G.outs, nextId: G.nextId, commute: G.commute,
+    unlocked: G.unlocked, outs: G.outs, mode: G.mode, hist: G.hist, evNext: G.evNext, nextId: G.nextId, commute: G.commute,
     nodes: [...G.nodes.values()].map(n => [n.id, r1(n.x), r1(n.y), n.ctl, r1(n.z)]),
     edges: [...G.edges.values()].map(e => [e.id, e.a, e.b, e.spec, e.pts.flatMap(p => [r1(p.x), r1(p.y), Math.round(p.z * 100) / 100])]),
-    lots: [...G.lots.values()].map(l => [r1(l.x), r1(l.y), l.xa.x, l.xa.y, l.ya.x, l.ya.y, r1(l.w), r1(l.d), l.z, l.b ? l.b.level : 0, l.b && l.b.abandoned ? 1 : 0]),
+    lots: [...G.lots.values()].map(l => [r1(l.x), r1(l.y), l.xa.x, l.xa.y, l.ya.x, l.ya.y, r1(l.w), r1(l.d), l.z, l.b ? l.b.level : 0, l.b && l.b.abandoned ? 1 : 0, l.svc || 0]),
     zone: toB64(G.zone), trees: toB64(alive),
   };
 }
@@ -2191,8 +2392,9 @@ function initDerived() {
   rebuildTreeGrid();
   rebuildRoadIndex();
 }
-function foundCity(seed) {
-  G = newCity(seed);
+function foundCity(seed, mode) {
+  G = newCity(seed, mode);
+  if (G.mode.unlockAll) G.unlocked = { lights: true, round: true };
   genTerrain(G);
   initDerived();
   const hy = G.hy, rnd = mulberry(seed + 77);
@@ -2224,9 +2426,9 @@ function finishBoot() {
   setSpeed(1);
 }
 function loadCity(d) {
-  G = newCity(d.seed);
+  G = newCity(d.seed, d.mode);
   genTerrain(G);
-  Object.assign(G, { slot: d.slot, name: d.name, money: d.money, time: d.time, month: d.month, monthAcc: d.monthAcc, net: d.net, milestone: d.milestone, unlocked: d.unlocked || {}, commute: d.commute || 1 });
+  Object.assign(G, { evNext: d.evNext || 0, hist: d.hist || [], slot: d.slot, name: d.name, money: d.money, time: d.time, month: d.month, monthAcc: d.monthAcc, net: d.net, milestone: d.milestone, unlocked: d.unlocked || {}, commute: d.commute || 1 });
   G.zone.set(fromB64(d.zone));
   const alive = fromB64(d.trees);
   G.trees.forEach((t, i) => { t.alive = alive[i] !== 0; });
@@ -2240,8 +2442,9 @@ function loadCity(d) {
   }
   G.outs = d.outs || [];
   initDerived();
-  for (const [x, y, ax, ay, bx, by, w, dd, z, level, ab] of d.lots) {
+  for (const [x, y, ax, ay, bx, by, w, dd, z, level, ab, svc] of d.lots) {
     const l = addLot({ x, y, xa: { x: ax, y: ay }, ya: { x: bx, y: by }, w, d: dd, z });
+    if (svc) { l.svc = svc; l.b = makeService(l); l.b.born = -99; continue; }
     if (level) { l.b = makeBuilding(l, level); l.b.born = -99; if (ab) { l.b.abandoned = true; l.b.abTime = G.time; } }
   }
   finishBoot();
@@ -2577,6 +2780,18 @@ function drawLotsGround(lots) {
         const s = partScale(b, { d: 0.5 }, age);
         ctx.fillStyle = P.night ? '#5b5850' : '#f4f1ea'; ctx.beginPath(); rrect(p.x - p.w / 2 * s - 0.6, p.y - p.h / 2 * s - 0.6, p.w * s + 1.2, p.h * s + 1.2, 1.2); ctx.fill();
         ctx.fillStyle = P.pool; ctx.beginPath(); rrect(p.x - p.w / 2 * s, p.y - p.h / 2 * s, p.w * s, p.h * s, 1); ctx.fill();
+      } else if (p.t === 'field') {
+        const s = partScale(b, p, age);
+        if (s <= 0.02) continue;
+        ctx.fillStyle = P.night ? '#6a3a2c' : '#c9765a'; ctx.beginPath(); rrect(p.x - p.w / 2 * s, p.y - p.h / 2 * s, p.w * s, p.h * s, p.w * 0.45 * s); ctx.fill();
+        ctx.fillStyle = P.night ? '#2c4a2f' : '#7fbf62'; ctx.beginPath(); rrect(p.x - p.w / 2 * s + 2.4, p.y - p.h / 2 * s + 2.4, p.w * s - 4.8, p.h * s - 4.8, p.w * 0.35 * s); ctx.fill();
+        ctx.strokeStyle = 'rgba(255,255,255,0.7)'; ctx.lineWidth = 0.3; ctx.beginPath(); ctx.moveTo(p.x - p.w * 0.25 * s, p.y); ctx.lineTo(p.x + p.w * 0.25 * s, p.y); ctx.stroke();
+      } else if (p.t === 'heli') {
+        const s = partScale(b, p, age);
+        if (s <= 0.02) continue;
+        ctx.fillStyle = '#5b5f66'; ctx.beginPath(); ctx.arc(p.x, p.y, 4.2 * s, 0, 7); ctx.fill();
+        ctx.strokeStyle = '#f0b429'; ctx.lineWidth = 0.5; ctx.beginPath(); ctx.arc(p.x, p.y, 3.4 * s, 0, 7); ctx.stroke();
+        ctx.fillStyle = '#ffffff'; ctx.fillRect(p.x - 1.4 * s, p.y - 1.6 * s, 0.6 * s, 3.2 * s); ctx.fillRect(p.x + 0.8 * s, p.y - 1.6 * s, 0.6 * s, 3.2 * s); ctx.fillRect(p.x - 1 * s, p.y - 0.25 * s, 2 * s, 0.5 * s);
       } else if (p.t === 'lot') {
         ctx.fillStyle = P.lotTop; ctx.beginPath(); rrect(p.x - p.w / 2, p.y - p.h / 2, p.w, p.h, 1.2); ctx.fill();
         ctx.strokeStyle = P.mark; ctx.lineWidth = 0.25; ctx.beginPath();
@@ -2606,7 +2821,13 @@ function addShadows(lots, trees, parkTrees) {
     if (!b) continue;
     const age = G.time - b.born;
     for (const p of b.parts) {
-      if (p.t === 'box' || p.t === 'tank' || p.t === 'chim') {
+      if (p.t === 'oval') {
+        const s = partScale(b, p, age);
+        if (s <= 0.02) continue;
+        const ox = SHX * p.H * s, oy = SHY * p.H * s, pts = [];
+        for (let k = 0; k < 16; k++) { const a = k / 16 * Math.PI * 2, [wx, wy] = toWorld(l, p.x + Math.cos(a) * p.rx * s, p.y + Math.sin(a) * p.ry * s); pts.push([wx, wy], [wx + ox, wy + oy]); }
+        addPoly(hull(pts));
+      } else if (p.t === 'box' || p.t === 'tank' || p.t === 'chim') {
         const s = partScale(b, p, age);
         if (s <= 0.02) continue;
         const H = p.H * s, ox = SHX * H, oy = SHY * H, pts = [];
@@ -2670,6 +2891,40 @@ function drawLotBodies(lots) {
         if (s <= 0.02) continue;
         ctx.fillStyle = bcol('#9c5a48'); ctx.beginPath(); ctx.arc(p.x, p.y, p.r * s, 0, 7); ctx.fill();
         ctx.fillStyle = '#3a3330'; ctx.beginPath(); ctx.arc(p.x, p.y, p.r * 0.55 * s, 0, 7); ctx.fill();
+      } else if (p.t === 'oval') {
+        const s = partScale(b, p, age);
+        if (s <= 0.02) continue;
+        const rx = p.rx * s, ry = p.ry * s, team = P.awning[p.c];
+        ctx.fillStyle = P.night ? '#4a4842' : '#d9d6cf'; ctx.beginPath(); ctx.ellipse(p.x, p.y, rx, ry, 0, 0, 7); ctx.fill();
+        // seating bowl in team colours, then the pitch
+        for (let k = 0; k < 24; k++) {
+          ctx.fillStyle = k % 2 ? team : sh(team, 0.3);
+          ctx.beginPath(); ctx.ellipse(p.x, p.y, rx * 0.9, ry * 0.88, 0, k / 24 * Math.PI * 2, (k + 1) / 24 * Math.PI * 2); ctx.lineTo(p.x, p.y); ctx.fill();
+        }
+        ctx.fillStyle = P.night ? '#2f5a2f' : '#6fb253'; ctx.beginPath(); rrect(p.x - rx * 0.56, p.y - ry * 0.5, rx * 1.12, ry, 2); ctx.fill();
+        ctx.fillStyle = 'rgba(255,255,255,0.12)';
+        for (let k = 0; k < 6; k += 2) ctx.fillRect(p.x - rx * 0.56 + k * rx * 0.187, p.y - ry * 0.5, rx * 0.187, ry);
+        ctx.strokeStyle = 'rgba(255,255,255,0.85)'; ctx.lineWidth = 0.35;
+        ctx.strokeRect(p.x - rx * 0.5, p.y - ry * 0.42, rx, ry * 0.84);
+        ctx.beginPath(); ctx.moveTo(p.x, p.y - ry * 0.42); ctx.lineTo(p.x, p.y + ry * 0.42); ctx.stroke();
+        ctx.beginPath(); ctx.arc(p.x, p.y, ry * 0.16, 0, 7); ctx.stroke();
+        ctx.strokeRect(p.x - rx * 0.5, p.y - ry * 0.2, rx * 0.12, ry * 0.4); ctx.strokeRect(p.x + rx * 0.38, p.y - ry * 0.2, rx * 0.12, ry * 0.4);
+        ctx.strokeStyle = P.night ? '#6a6760' : '#f4f2ec'; ctx.lineWidth = 2; ctx.beginPath(); ctx.ellipse(p.x, p.y, rx - 1, ry - 1, 0, 0, 7); ctx.stroke();
+        if (G.ev && G.ev.lot === l.id) { // crowd flashes on match day
+          ctx.fillStyle = 'rgba(255,255,255,0.5)';
+          for (let k = 0; k < 30; k++) { const a = hash(k, Math.floor(clock * 6), 9) * Math.PI * 2, f = 0.66 + hash(k, 3, Math.floor(clock * 6)) * 0.2; ctx.fillRect(p.x + Math.cos(a) * rx * f, p.y + Math.sin(a) * ry * f, 0.5, 0.5); }
+        }
+      } else if (p.t === 'mast') {
+        const s = partScale(b, p, age);
+        if (s <= 0.02) continue;
+        const lit = P.night || (G.ev && G.ev.lot === l.id);
+        if (lit) { const g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, 14); g.addColorStop(0, 'rgba(255,245,210,0.5)'); g.addColorStop(1, 'rgba(255,245,210,0)'); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(p.x, p.y, 14, 0, 7); ctx.fill(); }
+        ctx.fillStyle = '#5b5f66'; ctx.fillRect(p.x - 1.6 * s, p.y - 0.8 * s, 3.2 * s, 1.6 * s);
+        ctx.fillStyle = lit ? '#fff6d6' : '#c9ccbe'; ctx.fillRect(p.x - 1.3 * s, p.y - 0.5 * s, 2.6 * s, 1 * s);
+      } else if (p.t === 'cross') {
+        const s = partScale(b, p, age);
+        if (s <= 0.02) continue;
+        ctx.fillStyle = '#e34948'; ctx.fillRect(p.x - 1 * s, p.y - 3 * s, 2 * s, 6 * s); ctx.fillRect(p.x - 3 * s, p.y - 1 * s, 6 * s, 2 * s);
       } else if (p.t === 'sign') {
         const s = partScale(b, p, age);
         if (s <= 0.02) continue;
@@ -3188,6 +3443,7 @@ cv.addEventListener('pointerdown', e => {
     if (brushFill) stroke = { fill: true };
     else { stroke = { last: w }; paintCircle(w.x, w.y, BRUSH[brushIdx], toolZone()); paintFx(w.x, w.y); }
   } else if (tool === 'doze') { stroke = { last: w, doze: true }; bulldozeAt(w.x, w.y, DOZE[dozeIdx]); }
+  else if (tool === 'place') placeService(w.x, w.y, svcType);
   else if (tool === 'junction') stroke = { junction: true };
 });
 cv.addEventListener('pointermove', e => {
@@ -3298,7 +3554,7 @@ window.addEventListener('keydown', e => {
   shiftDown = e.shiftKey;
   if (e.code === 'Space') { e.preventDefault(); if (!e.repeat) { spaceDown = true; spacePanned = false; cv.classList.add('pan'); } return; }
   if (state !== 'play') return;
-  const tk = { 1: 'inspect', 2: 'road', 3: 'junction', 4: 'zone', 5: 'doze' }[k];
+  const tk = { 1: 'inspect', 2: 'road', 3: 'junction', 4: 'zone', 5: 'place', 6: 'doze' }[k];
   if (tk) setTool(tk);
   if (tool === 'road') { if (k === 'z') setShape('straight'); if (k === 'x') setShape('curve'); if (k === 'c') setShape('free'); if (k === 'v') setShape('grid'); }
   if (k === 'escape') { rs = null; stroke = null; selected = null; $('tip').hidden = true; }
@@ -3410,6 +3666,15 @@ function drawPreview() {
         }
       }
     }
+  } else if (tool === 'place') {
+    const { l, why } = serviceCandidate(w.x, w.y, svcType), S = SERVICES[svcType];
+    const bad = why || S.cost > G.money;
+    ctx.save(); ctx.transform(l.xa.x, l.xa.y, l.ya.x, l.ya.y, l.x, l.y);
+    ctx.fillStyle = bad ? 'rgba(200,68,58,0.3)' : 'rgba(79,174,100,0.3)'; ctx.strokeStyle = bad ? '#c8443a' : '#2f8f50'; ctx.lineWidth = 1;
+    ctx.beginPath(); rrect(-l.w / 2, -l.d / 2, l.w, l.d, 2); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = bad ? '#c8443a' : '#2f8f50'; ctx.beginPath(); ctx.moveTo(-3, -l.d / 2 + 1); ctx.lineTo(3, -l.d / 2 + 1); ctx.lineTo(0, -l.d / 2 - 3); ctx.fill();
+    ctx.restore();
+    previewLabel = { text: why || `${S.name} · $${fmt(S.cost)} · $${S.up}/mo`, bad: !!bad };
   } else if (tool === 'junction') {
     const n = nearestJunction(w.x, w.y);
     if (n) {
@@ -3438,6 +3703,15 @@ function describeAt(x, y) {
   forLotsIn(x - 2, y - 2, x + 2, y + 2, l => { if (pointInLot(l, x, y, 0)) lot = l; });
   const rows = [], notes = [];
   let title = '', sw = null;
+  if (lot && lot.z === ZS) {
+    const S = SERVICES[lot.svc];
+    const swc0 = 'var(--sign)';
+    const rows2 = [['Jobs', S.jobs], ['Upkeep', `$${S.up}/mo`], ['Land value', Math.round(lvAt(lot.x, lot.y))]];
+    const notes2 = [S.note];
+    if (!lot.attach) notes2.push('Not connected to a road.');
+    if (lot.svc === 'stadium') notes2.push(G.ev && G.ev.lot === lot.id ? 'Match day: crowds are on the roads now.' : `Next match in about ${Math.max(1, Math.round((G.evNext - G.time) / MONTH_LEN))} months.`);
+    return `<h4><i class="sw" style="background:${swc0}"></i>${S.name}</h4>` + rows2.map(([a, b]) => `<div class="row"><span>${a}</span><b>${b}</b></div>`).join('') + notes2.map(n => `<div class="note">${n}</div>`).join('');
+  }
   if (lot) {
     const b = lot.b, zn = { 2: 'Homes', 3: 'Shops', 4: 'Industry' }[lot.z];
     sw = lot.z;
@@ -3506,15 +3780,17 @@ function setSpeed(v) {
   if (!G) return;
   if (v) lastSpeed = v;
   G.speed = v;
-  [0, 1, 2, 4].forEach((s, k) => $('sp' + k).classList.toggle('on', s === v));
+  SPEEDS_T.forEach((s, k) => $('sp' + k).classList.toggle('on', s === v));
 }
-[0, 1, 2, 3].forEach(k => $('sp' + k).addEventListener('click', () => setSpeed([0, 1, 2, 4][k])));
+const SPEEDS_T = [0, 1, 2, 4, 10];
+SPEEDS_T.forEach((v, k) => $('sp' + k).addEventListener('click', () => setSpeed(v)));
 function setTool(t) {
   tool = t; rs = null; stroke = null; selected = null;
   for (const b of document.querySelectorAll('.tool')) b.classList.toggle('on', b.dataset.tool === t);
   $('roadOpts').hidden = $('roadDesign').hidden = $('roadShapeSeg').hidden = t !== 'road';
   $('zoneOpts').hidden = !isPaint();
   $('dozeOpts').hidden = t !== 'doze';
+  $('placeOpts').hidden = t !== 'place';
   $('juncOpts').hidden = t !== 'junction';
   cv.classList.toggle('pan', t === 'inspect');
   $('tip').hidden = true;
@@ -3597,6 +3873,9 @@ $('dSpeed').addEventListener('click', () => { design.kmh = SPEEDS[(SPEEDS.indexO
 $('dFront').addEventListener('click', () => { design.front = !design.front; syncDesign(); });
 for (const b of document.querySelectorAll('[data-elev]')) b.addEventListener('click', () => { elevLevel = +b.dataset.elev; syncDesign(); });
 for (const b of document.querySelectorAll('[data-rmode]')) b.addEventListener('click', () => { roadMode = b.dataset.rmode; rs = null; syncDesign(); });
+let svcType = 'stadium';
+function setSvc(t) { svcType = t; for (const b of document.querySelectorAll('[data-svc]')) b.classList.toggle('on', b.dataset.svc === t); }
+for (const b of document.querySelectorAll('[data-svc]')) b.addEventListener('click', () => setSvc(b.dataset.svc));
 function setZoneType(z) { zoneType = z; for (const b of document.querySelectorAll('[data-zone]')) b.classList.toggle('on', b.dataset.zone === z); }
 for (const b of document.querySelectorAll('[data-zone]')) b.addEventListener('click', () => setZoneType(b.dataset.zone));
 for (const b of document.querySelectorAll('[data-shape]')) b.addEventListener('click', () => setShape(b.dataset.shape));
@@ -3618,7 +3897,7 @@ function toast(msg, kind) {
 }
 function updateHud() {
   if (!G) return;
-  $('sMoney').textContent = (G.money < 0 ? '-$' : '$') + fmt(Math.abs(G.money));
+  $('sMoney').textContent = G.mode.budget === 'unlimited' ? 'Unlimited' : (G.money < 0 ? '-$' : '$') + fmt(Math.abs(G.money));
   const net = $('sNet');
   net.textContent = `${G.net >= 0 ? '+' : '-'}$${fmt(Math.abs(G.net))}/mo`;
   net.classList.toggle('neg', G.net < 0);
@@ -3663,15 +3942,131 @@ function begin(fn) {
   setTool('road');
   toast('Draw streets off the highway, then paint homes beside them.');
 }
+// ---------- stats panel: one small line chart per measure ----------
+let statsOpen = false, statsRange = 12, statsTable = false;
+const STAT_DEFS = [
+  { k: 'pop', name: 'Population', f: v => fmt(v) },
+  { k: 'jobs', name: 'Jobs', f: v => fmt(v) },
+  { k: 'money', name: 'Funds', f: v => (v < 0 ? '-$' : '$') + fmt(Math.abs(v)), skip: () => G.mode.budget === 'unlimited' },
+  { k: 'net', name: 'Monthly balance', f: v => (v < 0 ? '-$' : '+$') + fmt(Math.abs(v)), zero: true },
+  { k: 'flow', name: 'Traffic flow', f: v => Math.round(v) + '%', lo: 0, hi: 100 },
+  { k: 'commute', name: 'Commute time', f: v => v.toFixed(2) + '×', lo: 1 },
+  { k: 'cars', name: 'Cars on the road', f: v => fmt(v) },
+];
+const monthName = m => `${MONTHS[m % 12]} ${2026 + Math.floor(m / 12)}`;
+function niceStep(span) { const p = Math.pow(10, Math.floor(Math.log10(span || 1))), n = span / p; return (n <= 1 ? 1 : n <= 2 ? 2 : n <= 5 ? 5 : 10) * p; }
+function statRows() { const h = G.hist; return statsRange ? h.slice(-statsRange) : h; }
+function drawStats() {
+  if (!statsOpen || !G) return;
+  const body = $('statBody'), rows = statRows();
+  if (rows.length < 2) { body.innerHTML = '<p class="stempty">Graphs fill in as the months go by. Speed up time to see them sooner.</p>'; return; }
+  const defs = STAT_DEFS.filter(d => !d.skip || !d.skip());
+  if (statsTable) {
+    const last = rows.slice(-24).reverse();
+    body.innerHTML = `<div class="sttablewrap"><table class="sttable"><thead><tr><th>Month</th>${defs.map(d => `<th>${d.name}</th>`).join('')}</tr></thead><tbody>${last.map(r => `<tr><td>${monthName(r.m)}</td>${defs.map(d => `<td>${d.f(r[d.k] || 0)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+    return;
+  }
+  if (!body.querySelector('.stat') || body.dataset.n !== String(defs.length)) {
+    body.innerHTML = defs.map(d => `<div class="stat" data-k="${d.k}"><div class="sh"><span>${d.name}</span><b></b></div><canvas aria-label="${d.name} over time"></canvas></div>`).join('');
+    body.dataset.n = defs.length;
+    for (const c of body.querySelectorAll('canvas')) {
+      c.addEventListener('pointermove', e => { c._hover = e.offsetX; drawStats(); });
+      c.addEventListener('pointerleave', () => { c._hover = null; $('statTip').hidden = true; drawStats(); });
+    }
+  }
+  const css = getComputedStyle(document.documentElement);
+  const col = css.getPropertyValue('--series-1').trim(), grid = css.getPropertyValue('--grid').trim(), muted = css.getPropertyValue('--muted').trim(), surf = css.getPropertyValue('--panel').trim(), ink = css.getPropertyValue('--ink').trim();
+  let tipShown = false;
+  for (const d of defs) {
+    const wrap = body.querySelector(`.stat[data-k="${d.k}"]`), c = wrap.querySelector('canvas'), x = c.getContext('2d');
+    const W = c.clientWidth, H = 86, r = window.devicePixelRatio || 1;
+    if (c.width !== Math.round(W * r)) { c.width = Math.round(W * r); c.height = H * r; }
+    x.setTransform(r, 0, 0, r, 0, 0); x.clearRect(0, 0, W, H);
+    const vals = rows.map(q => q[d.k] || 0), cur = vals[vals.length - 1], prev = vals[0];
+    const delta = cur - prev, pct = prev ? Math.round(delta / Math.abs(prev) * 100) : 0;
+    wrap.querySelector('b').innerHTML = `${d.f(cur)}<small>${delta >= 0 ? '▲' : '▼'} ${d.f(Math.abs(delta)).replace(/^[+-]/, '')}${prev && d.k !== 'net' ? ` (${pct > 0 ? '+' : ''}${pct}%)` : ''}</small>`;
+    let lo = Math.min(...vals), hi = Math.max(...vals);
+    if (d.lo !== undefined) lo = Math.min(lo, d.lo);
+    if (d.hi !== undefined) hi = Math.max(hi, d.hi);
+    if (d.zero || d.k === 'pop' || d.k === 'jobs' || d.k === 'cars') { lo = Math.min(lo, 0); hi = Math.max(hi, 0); }
+    if (hi - lo < 1e-6) hi = lo + 1;
+    const step = niceStep((hi - lo) / 2.5);
+    lo = Math.floor(lo / step) * step; hi = Math.ceil(hi / step) * step;
+    const L = 44, R = 8, T = 6, B = 16, pw = W - L - R, ph = H - T - B;
+    const X = i => L + (rows.length === 1 ? 0 : i / (rows.length - 1) * pw), Y = v => T + ph - (v - lo) / (hi - lo) * ph;
+    x.font = '500 10px "IBM Plex Mono", ui-monospace, monospace'; x.textBaseline = 'middle';
+    for (let v = lo; v <= hi + step * 0.01; v += step) {
+      const y = Math.round(Y(v)) + 0.5;
+      x.strokeStyle = v === 0 && lo < 0 ? muted : grid; x.lineWidth = 1;
+      x.beginPath(); x.moveTo(L, y); x.lineTo(W - R, y); x.stroke();
+      x.fillStyle = muted; x.textAlign = 'right';
+      const lab = Math.abs(v) >= 10000 ? (v / 1000).toFixed(0) + 'k' : Math.abs(v) >= 1000 ? (v / 1000).toFixed(1) + 'k' : (step < 1 ? v.toFixed(1) : Math.round(v));
+      x.fillText(lab, L - 6, y);
+    }
+    x.textAlign = 'left'; x.fillText(monthName(rows[0].m), L, H - 6);
+    x.textAlign = 'right'; x.fillText(monthName(rows[rows.length - 1].m), W - R, H - 6);
+    // area + 2px line
+    x.beginPath(); vals.forEach((v, i) => i ? x.lineTo(X(i), Y(v)) : x.moveTo(X(i), Y(v)));
+    x.lineTo(X(vals.length - 1), Y(Math.max(lo, 0))); x.lineTo(X(0), Y(Math.max(lo, 0))); x.closePath();
+    x.globalAlpha = 0.12; x.fillStyle = col; x.fill(); x.globalAlpha = 1;
+    x.beginPath(); vals.forEach((v, i) => i ? x.lineTo(X(i), Y(v)) : x.moveTo(X(i), Y(v)));
+    x.strokeStyle = col; x.lineWidth = 2; x.lineJoin = 'round'; x.stroke();
+    const dot = (i, rad) => { x.fillStyle = surf; x.beginPath(); x.arc(X(i), Y(vals[i]), rad + 2, 0, 7); x.fill(); x.fillStyle = col; x.beginPath(); x.arc(X(i), Y(vals[i]), rad, 0, 7); x.fill(); };
+    if (c._hover != null && c._hover >= L - 4) {
+      const i = clamp(Math.round((c._hover - L) / pw * (rows.length - 1)), 0, rows.length - 1);
+      x.strokeStyle = muted; x.lineWidth = 1; x.beginPath(); x.moveTo(Math.round(X(i)) + 0.5, T); x.lineTo(Math.round(X(i)) + 0.5, T + ph); x.stroke();
+      dot(i, 4);
+      const tip = $('statTip');
+      tip.innerHTML = `${monthName(rows[i].m)} · <b>${d.f(vals[i])}</b>`;
+      tip.hidden = false; tipShown = true;
+      const right = c.offsetLeft + X(i) + 10, left = c.offsetLeft + X(i) - 10 - tip.offsetWidth;
+      tip.style.left = (right + tip.offsetWidth < $('stats').clientWidth - 4 ? right : left) + 'px';
+      tip.style.top = (wrap.offsetTop + c.offsetTop + 4) + 'px';
+    } else dot(vals.length - 1, 3);
+  }
+  if (!tipShown) $('statTip').hidden = true;
+}
+function setRange(v) { statsRange = v; for (const b of document.querySelectorAll('[data-range]')) b.classList.toggle('on', +b.dataset.range === v); drawStats(); }
+for (const b of document.querySelectorAll('[data-range]')) b.addEventListener('click', () => setRange(+b.dataset.range));
+$('btnStats').addEventListener('click', () => { statsOpen = !statsOpen; $('stats').hidden = !statsOpen; $('btnStats').classList.toggle('on', statsOpen); if (statsOpen) { $('statBody').innerHTML = ''; drawStats(); } });
+$('btnCloseStats').addEventListener('click', () => { statsOpen = false; $('stats').hidden = true; $('btnStats').classList.remove('on'); });
+$('btnStatTable').addEventListener('click', () => { statsTable = !statsTable; $('btnStatTable').setAttribute('aria-pressed', statsTable); $('btnStatTable').classList.toggle('on', statsTable); $('statBody').innerHTML = ''; drawStats(); });
+setRange(12);
+
 // ---------- cities menu ----------
 const TOWN_NAMES = ['Riverton', 'Maple Falls', 'Ashford', 'Clearwater', 'Bramley', 'Oakhaven', 'Linden', 'Fairport', 'Stonebridge', 'Elmsworth', 'Kestrel Bay', 'Hollins'];
 function freshName() {
   const used = new Set(readIndex().map(c => c.name));
   return TOWN_NAMES.find(n => !used.has(n)) || `New Town ${readIndex().length + 1}`;
 }
+const newMode = { ...DEFAULT_MODE };
+const MODE_OPTS = [
+  ['budget', 'Budget', [['tight', 'Tight', '$10k'], ['normal', 'Normal', '$25k'], ['rich', 'Rich', '$100k'], ['unlimited', 'Unlimited', 'sandbox']]],
+  ['traffic', 'Traffic', [['light', 'Light', 'no one leaves'], ['normal', 'Normal', ''], ['rush', 'Rush hour', '×1.5 cars']]],
+  ['land', 'Land', [['valley', 'River valley', ''], ['lakes', 'Lakes', ''], ['plains', 'Plains', 'no water']]],
+  ['unlockAll', 'Unlocks', [[false, 'Earn them', ''], [true, 'Everything open', '']]],
+];
+function renderModes() {
+  for (const box of document.querySelectorAll('[data-modes]')) {
+    box.innerHTML = '';
+    for (const [k, label, opts] of MODE_OPTS) {
+      const l = document.createElement('span'); l.className = 'ml'; l.textContent = label;
+      const row = document.createElement('div'); row.className = 'mo';
+      for (const [v, name, note] of opts) {
+        const b = document.createElement('button');
+        b.innerHTML = `${name}${note ? `<small>${note}</small>` : ''}`;
+        b.classList.toggle('on', newMode[k] === v);
+        b.setAttribute('aria-pressed', newMode[k] === v);
+        b.addEventListener('click', () => { newMode[k] = v; renderModes(); });
+        row.appendChild(b);
+      }
+      box.append(l, row);
+    }
+  }
+}
 function startNewCity(name) {
   if (G && state === 'play') save(false);
-  begin(() => { foundCity((Math.random() * 1e9) | 0); G.name = (name || '').trim() || freshName(); G.slot = null; });
+  begin(() => { foundCity((Math.random() * 1e9) | 0, { ...newMode }); G.name = (name || '').trim() || freshName(); G.slot = null; });
   save(false);
 }
 function openSlot(id) {
@@ -3723,6 +4118,7 @@ window.addEventListener('keydown', e => {
   if (e.key === 'Escape' && !$('cities').hidden) $('cities').hidden = true;
 });
 migrateLegacy();
+renderModes();
 $('introName').value = freshName();
 window.addEventListener('pagehide', () => save(false));
 document.addEventListener('visibilitychange', () => { if (document.hidden) save(false); });
@@ -3762,7 +4158,7 @@ window.addEventListener('resize', resize);
 demoCity();
 renderCities();
 cam.x = 450; cam.y = G.hy; cam.z = clamp(Math.min(innerWidth, innerHeight * 1.5) / 560, 0.8, 2.4);
-setTool('road'); setShape('straight'); setBrush(1); setDoze(1); setZoneType('res'); syncDesign(); syncLocks();
+setSvc('stadium'); setTool('road'); setShape('straight'); setBrush(1); setDoze(1); setZoneType('res'); syncDesign(); syncLocks();
 
 // =====================================================================
 // main loop

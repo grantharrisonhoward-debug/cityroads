@@ -57,6 +57,29 @@ lay themselves out, and every resident's commute has to get through the network 
 Keep as many cities as you like. The **Cities** button in the top bar saves the current city (or press Ctrl+S), starts a new one, and opens or deletes saved ones. Cities also save automatically while you play and appear on the start screen. They're stored in your browser. Dark mode turns the map to night, with lit windows,
 headlights and glowing park lamps.
 
+## New city options
+
+When founding a city, pick:
+- **Budget:** Tight ($10k), Normal ($25k), Rich ($100k) or Unlimited (sandbox).
+- **Traffic:** Light (×0.6 cars, and nobody abandons their home), Normal, or Rush hour (×1.5 cars).
+- **Land:** River valley, Lakes, or Plains with no water.
+- **Unlocks:** earn them with population, or start with everything open.
+
+## Places
+
+The **Places** tool builds city services that face the nearest road. Each adds jobs and land value,
+and costs upkeep each month:
+- **Stadium:** hosts match days. Crowds drive in from across the city, then leave together after the match.
+- **Hospital** and **School:** raise land value and draw residents.
+- **Fire station** and **Police station:** make the neighbourhood feel safer.
+
+## Stats and speed
+
+- **Stats** (top bar) opens graphs of population, jobs, funds, monthly balance, traffic flow, commute
+  time and cars on the road. Choose 1 year, 5 years or all time. Hover a graph for exact values, or
+  switch to a table.
+- Time runs at pause, 1×, 2×, 4× or a super-fast **10×**.
+
 ## Controls
 
 | Input | Action |
@@ -64,7 +87,7 @@ headlights and glowing park lamps.
 | Drag | Use the selected tool |
 | Scroll / pinch | Zoom |
 | Right-drag, Space-drag, two fingers, WASD | Pan |
-| `1`–`5` | Inspect, Roads, Junctions, Zoning, Bulldoze |
+| `1`–`6` | Inspect, Roads, Junctions, Zoning, Places, Bulldoze |
 | `Z` / `X` / `C` / `V` | Straight, curve, freehand or grid |
 | Shift | Snap road angles to 15° |
 | Space (tap) | Pause |
