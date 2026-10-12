@@ -10,12 +10,20 @@ lay themselves out, and every resident's commute has to get through the network 
 ## How it plays
 
 - **Free-form roads.** Draw straight, curved (start, bend, end) or freehand roads anywhere.
-  Crossings become junctions automatically, and roads over water become bridges.
-- **Road types.**
-  - Streets have one lane each way.
-  - One-ways have two lanes in the direction you draw.
-  - Avenues have two lanes each way and are faster (unlock at 150 residents).
-  - Highways are fast, have no driveways and pass over other roads without junctions (unlock at 500).
+  Roads at the same level join into junctions automatically.
+- **Road designer.** Start from a preset (Street, One-way, Avenue, Boulevard, Freeway, Ramp), then
+  fine-tune it:
+  - Lanes ahead and back (0 back makes a one-way).
+  - Median: none, painted, grass with trees, or concrete barrier.
+  - Speed limit from 30 to 120 km/h.
+  - Whether buildings may have driveways onto it.
+
+  A live cross-section shows the result. **Upgrade** mode rebuilds an existing road with the current
+  design, or reverses a one-way. Cars change lanes to overtake, so extra lanes add real capacity.
+- **Elevation.** Build at tunnel, ground, bridge or high-bridge level. Roads only meet where they're
+  at the same level, so you can stack interchanges and overpasses. Ramps form automatically where a
+  road changes level. Bridges are drawn raised with pillars and shadows, and tunnels show as faint
+  ghosts with portals.
 - **Junctions are the bottleneck.**
   - At a yield junction, cars stop and only one direction moves at a time.
   - Traffic lights cycle between approaches (unlock at 60 residents).
@@ -46,7 +54,7 @@ headlights and glowing park lamps.
 | Drag | Use the selected tool |
 | Scroll / pinch | Zoom |
 | Right-drag, Space-drag, two fingers, WASD | Pan |
-| `1`–`8` | Inspect, Roads, Junctions, Homes, Shops, Industry, Park, Bulldoze |
+| `1`–`5` | Inspect, Roads, Junctions, Zoning, Bulldoze |
 | `Z` / `X` / `C` | Straight, curve or freehand road |
 | Shift | Snap road angles to 15° |
 | Space (tap) | Pause |

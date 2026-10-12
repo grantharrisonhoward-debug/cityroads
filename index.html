@@ -113,6 +113,14 @@ body { background: var(--bg); color: var(--ink); font-family: var(--f-body); fon
 .seg button.on small { color: var(--panel); opacity: 0.7; }
 .seg button.locked { opacity: 0.45; }
 .seg[hidden] { display: none !important; }
+.stepper { display: flex; align-items: center; gap: 3px; background: var(--panel-2); border-radius: 9px; padding: 2px; }
+.stepper b { font: 600 13px var(--f-mono); min-width: 1.2ch; text-align: center; }
+.stepper small { font-size: 10.5px; color: var(--muted); margin-right: 2px; }
+.stepper button { padding: 3px 8px; font-size: 14px; }
+#dXsec { width: 150px; height: 26px; margin: 0 4px; }
+.seg button:disabled { opacity: 0.4; cursor: default; }
+.only-sm { display: none !important; }
+@media (max-width: 640px) { .only-sm { display: flex !important; } }
 
 #tip { position: fixed; z-index: 5; pointer-events: none; background: var(--panel); color: var(--ink); border-radius: 10px; box-shadow: var(--shadow);
   padding: 8px 11px; font-size: 12.5px; line-height: 1.45; max-width: 250px; }
@@ -155,6 +163,7 @@ body { background: var(--bg); color: var(--ink); font-family: var(--f-body); fon
   .tool .pr { display: none; }
   .card h1 { font-size: 34px; }
   .seg .hint { font-size: 11.5px; }
+  body:not(.design-open) #roadDesign { display: none !important; }
   #toasts { top: calc(70px + env(safe-area-inset-top, 0px)); }
 }
 @media (prefers-reduced-motion: reduce) { .toast { animation: none; } }
@@ -189,23 +198,50 @@ body { background: var(--bg); color: var(--ink); font-family: var(--f-body); fon
 <div class="bar dock-wrap">
   <div class="sub">
     <div class="seg" id="roadOpts" hidden>
-      <span class="lab">Type</span>
-      <button data-rt="street" title="Two-way street, one lane each way">Street <small>$3/m</small></button>
-      <button data-rt="oneway" title="Two lanes in the direction you draw">One-way <small>$4/m</small></button>
-      <button data-rt="avenue" title="Two lanes each way, faster">Avenue <small>$8/m</small></button>
-      <button data-rt="highway" title="Fast, no driveways, passes over other roads without junctions">Highway <small>$16/m</small></button>
+      <span class="lab">Preset</span>
+      <button data-preset="street">Street</button>
+      <button data-preset="oneway">One-way</button>
+      <button data-preset="avenue">Avenue</button>
+      <button data-preset="boulevard">Boulevard</button>
+      <button data-preset="freeway">Freeway</button>
+      <button data-preset="ramp">Ramp</button>
+      <button id="dMore" class="only-sm" aria-expanded="false">Customise</button>
+    </div>
+    <div class="seg" id="roadDesign" hidden>
+      <span class="lab">Lanes</span>
+      <span class="stepper" title="Lanes in the direction you draw"><button data-step="f-1" aria-label="Fewer forward lanes">−</button><b id="dF">1</b><small>ahead</small><button data-step="f+1" aria-label="More forward lanes">+</button></span>
+      <span class="stepper" title="Lanes in the opposite direction (0 makes a one-way)"><button data-step="b-1" aria-label="Fewer backward lanes">−</button><b id="dB">1</b><small>back</small><button data-step="b+1" aria-label="More backward lanes">+</button></span>
+      <button id="dMed" title="Median between directions">Median: None</button>
+      <button id="dSpeed" title="Speed limit">40 km/h</button>
+      <button id="dFront" title="Whether buildings can have driveways onto this road">Driveways: on</button>
+      <canvas id="dXsec" width="150" height="26" aria-label="Road cross-section"></canvas>
+    </div>
+    <div class="seg" id="roadShapeSeg" hidden>
+      <span class="lab">Level</span>
+      <button data-elev="-1" title="Tunnel: passes under other roads and water">Tunnel</button>
+      <button data-elev="0">Ground</button>
+      <button data-elev="1" title="Bridge: passes over ground roads">Bridge</button>
+      <button data-elev="2" title="High bridge: passes over bridges too">High</button>
       <span class="gap"></span>
-      <span class="lab">Shape</span>
       <button data-shape="straight" title="Drag from start to end (Z). Hold Shift to snap angles.">Straight</button>
       <button data-shape="curve" title="Set the start, then the bend, then the end (X)">Curve</button>
       <button data-shape="free" title="Draw freely (C)">Freehand</button>
-    </div>
-    <div class="seg" id="paintOpts" hidden>
-      <span class="lab">Paint</span>
-      <button data-brush="0">Small</button>
-      <button data-brush="1">Medium</button>
-      <button data-brush="2">Large</button>
       <span class="gap"></span>
+      <button data-rmode="build">Build</button>
+      <button data-rmode="upgrade" title="Click an existing road to rebuild it with this design">Upgrade</button>
+      <span class="hint" id="dSummary"></span>
+    </div>
+    <div class="seg" id="zoneOpts" hidden>
+      <span class="lab">Zone</span>
+      <button data-zone="res"><i class="sw" style="background:var(--res)"></i>Homes</button>
+      <button data-zone="com"><i class="sw" style="background:var(--com)"></i>Shops</button>
+      <button data-zone="ind"><i class="sw" style="background:var(--ind)"></i>Industry</button>
+      <button data-zone="park"><i class="sw" style="background:var(--park)"></i>Park</button>
+      <button data-zone="none">Unzone</button>
+      <span class="gap"></span>
+      <button data-brush="0">S</button>
+      <button data-brush="1">M</button>
+      <button data-brush="2">L</button>
       <button data-brush="fill" title="Fill the area enclosed by roads">Fill area</button>
     </div>
     <div class="seg" id="dozeOpts" hidden>
@@ -220,6 +256,7 @@ body { background: var(--bg); color: var(--ink); font-family: var(--f-body); fon
     <div class="seg" id="viewSeg">
       <span class="lab">View</span>
       <button data-view="none" class="on">City</button>
+      <button data-view="zones">Zones</button>
       <button data-view="traffic">Traffic</button>
       <button data-view="value">Land value</button>
     </div>
@@ -235,20 +272,11 @@ body { background: var(--bg); color: var(--ink); font-family: var(--f-body); fon
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><path d="M12 2v5M12 17v5M2 12h5M17 12h5"/></svg>
       <span class="nm">Junctions</span><span class="pr">lights · rings</span></button>
     <span class="sep"></span>
-    <button class="tool" data-tool="res" title="Homes (4)">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M4 11l8-7 8 7v9H4z"/><path d="M10 20v-5h4v5"/></svg>
-      <span class="nm"><i class="sw" style="background:var(--res)"></i>Homes</span><span class="pr">free</span></button>
-    <button class="tool" data-tool="com" title="Shops (5)">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M4 9l1.5-5h13L20 9"/><path d="M4 9h16v2a2.6 2.6 0 01-5.3 0 2.6 2.6 0 01-5.4 0A2.6 2.6 0 014 11z"/><path d="M5.5 13.5V20h13v-6.5"/></svg>
-      <span class="nm"><i class="sw" style="background:var(--com)"></i>Shops</span><span class="pr">free</span></button>
-    <button class="tool" data-tool="ind" title="Industry (6)">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M3 20V10l5 3v-3l5 3v-3l5 3V4h3v16z"/></svg>
-      <span class="nm"><i class="sw" style="background:var(--ind)"></i>Industry</span><span class="pr">free</span></button>
-    <button class="tool" data-tool="park" title="Parks (7)">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><circle cx="12" cy="9" r="5.5"/><path d="M12 14.5V21M8 21h8"/></svg>
-      <span class="nm"><i class="sw" style="background:var(--park)"></i>Park</span><span class="pr">free</span></button>
+    <button class="tool" data-tool="zone" title="Zoning (4)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M4 7c3-3 7-3 9 0s6 3 7 0v10c-1 3-5 3-7 0s-6-3-9 0z"/></svg>
+      <span class="nm"><i class="sw" style="background:var(--res)"></i><i class="sw" style="background:var(--com)"></i><i class="sw" style="background:var(--ind)"></i>Zoning</span><span class="pr">free</span></button>
     <span class="sep"></span>
-    <button class="tool" data-tool="doze" title="Bulldoze (8)">
+    <button class="tool" data-tool="doze" title="Bulldoze (5)">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"><path d="M3 16h11l2-6h-5l-1-4H5v10"/><circle cx="6.5" cy="18.5" r="2"/><circle cx="12.5" cy="18.5" r="2"/><path d="M16 10l5 2v6"/></svg>
       <span class="nm">Bulldoze</span><span class="pr">roads · zones</span></button>
   </div>
@@ -263,8 +291,9 @@ body { background: var(--bg); color: var(--ink); font-family: var(--f-body); fon
     <h1><span class="mark" aria-hidden="true"></span>City Roads</h1>
     <p>A highway brings you into an empty valley. Draw streets wherever you like, paint where people should live, shop and work, and keep everyone moving. Neighbourhoods fill in by themselves. Jammed roads make people unhappy, and unhappy people leave.</p>
     <dl class="how">
-      <dt>Roads</dt><dd>Draw straight, curved or freehand roads. Streets, one-ways, avenues and highways each carry traffic differently.</dd>
-      <dt>Paint</dt><dd>Brush homes, shops, industry and parks onto the land for free. Buildings fit themselves along the roads inside the painted area.</dd>
+      <dt>Roads</dt><dd>Draw straight, curved or freehand roads. Design each one: lanes in each direction, median, speed limit and driveways, or start from a preset like Freeway.</dd>
+      <dt>Levels</dt><dd>Build tunnels, bridges and high bridges. Roads only meet at junctions on the same level, and ramps form where levels change.</dd>
+      <dt>Zoning</dt><dd>Paint homes, shops, industry and parks for free. Buildings fit themselves along the roads inside the painted area. Zone colours show only in the Zoning menu or the Zones view.</dd>
       <dt>Junctions</dt><dd>Every junction is a bottleneck. Upgrade busy ones to traffic lights or roundabouts, or route traffic around them.</dd>
       <dt>Watch</dt><dd>The Traffic view shows jams. Red badges mark homes with terrible commutes.</dd>
       <dt>Camera</dt><dd>Scroll or pinch to zoom. Right-drag, Space-drag or WASD to pan.</dd>
@@ -285,13 +314,38 @@ body { background: var(--bg); color: var(--ink); font-family: var(--f-body); fon
 // =====================================================================
 const WW = 2000, WH = 1400, CELL = 10, CW = WW / CELL, CH = WH / CELL, NC = CW * CH;
 const ZR = 2, ZC = 3, ZI = 4, ZP = 5;
-const RT = {
-  street:  { name: 'Street',  w: 10, lanes: 1, oneway: false, speed: 34, cost: 3,  up: 0.015, unlock: 0 },
-  oneway:  { name: 'One-way', w: 10, lanes: 2, oneway: true,  speed: 38, cost: 4,  up: 0.02,  unlock: 0 },
-  avenue:  { name: 'Avenue',  w: 18, lanes: 2, oneway: false, speed: 46, cost: 8,  up: 0.04,  unlock: 150 },
-  highway: { name: 'Highway', w: 20, lanes: 2, oneway: false, speed: 80, cost: 16, up: 0.08,  unlock: 500, noFront: true },
-  lane:    { name: 'Lane',    w: 7,  lanes: 1, oneway: false, speed: 20, cost: 0,  up: 0.004, unlock: 0, auto: true },
+// Roads are described by a spec: lanes each way, median, speed limit and whether buildings may front onto it.
+const LANE_W = 4.5;
+const MEDIANS = { none: { name: 'None', w: 0, cost: 0 }, paint: { name: 'Painted', w: 1.2, cost: 0.3 }, grass: { name: 'Grass', w: 6, cost: 1.5 }, barrier: { name: 'Barrier', w: 1.6, cost: 1.5 } };
+const MEDIAN_ORDER = ['none', 'paint', 'grass', 'barrier'];
+const SPEEDS = [30, 40, 50, 60, 80, 100, 120];
+const PRESETS = {
+  street:    { name: 'Street', f: 1, b: 1, med: 'none', kmh: 40, front: true },
+  oneway:    { name: 'One-way', f: 2, b: 0, med: 'none', kmh: 40, front: true },
+  avenue:    { name: 'Avenue', f: 2, b: 2, med: 'paint', kmh: 50, front: true },
+  boulevard: { name: 'Boulevard', f: 2, b: 2, med: 'grass', kmh: 60, front: true },
+  freeway:   { name: 'Freeway', f: 3, b: 3, med: 'barrier', kmh: 100, front: false },
+  ramp:      { name: 'Ramp', f: 1, b: 0, med: 'none', kmh: 60, front: false },
 };
+const LANE_SPEC = { f: 1, b: 1, med: 'none', kmh: 25, front: true, lw: 3.4 };
+const specCache = new Map();
+function specOf(o) {
+  const key = `${o.f}/${o.b}/${o.b ? o.med : 'none'}/${o.kmh}/${o.front ? 1 : 0}/${o.lw || ''}`;
+  let s = specCache.get(key);
+  if (s) return s;
+  const lw = o.lw || LANE_W, two = o.b > 0, med = two ? o.med : 'none', medW = MEDIANS[med].w, lanes = o.f + o.b;
+  s = {
+    key, f: o.f, b: o.b, med, kmh: o.kmh, front: !!o.front, lw, medW, lanes,
+    w: lanes * lw + medW + 1.6, oneway: !two, speed: o.kmh * 0.8, noFront: !o.front,
+    co: two ? (o.f - o.b) * lw / 2 : 0, freeway: !o.front && o.kmh >= 70, auto: !!o.lw,
+    cost: Math.round((lanes * 1.6 + MEDIANS[med].cost + (o.kmh >= 80 ? 2 : 0)) * (o.lw ? 0 : 10)) / 10,
+    up: lanes * 0.008 + MEDIANS[med].cost * 0.004,
+  };
+  const pre = Object.values(PRESETS).find(q => q.f === s.f && q.b === s.b && (s.b ? q.med === med : true) && q.kmh === s.kmh && q.front === s.front);
+  s.name = o.lw ? 'Lane' : pre ? pre.name : s.freeway ? (two ? `${s.f}+${s.b} freeway` : `${s.f}-lane freeway`) : s.noFront && !two ? `${s.f}-lane ramp` : two ? `${s.f}+${s.b} lane road` : `${s.f}-lane one-way`;
+  specCache.set(key, s);
+  return s;
+}
 const JUNC = {
   yield:  { name: 'Yield junction', cost: 0, unlock: 0, pen: 1.2 },
   lights: { name: 'Traffic lights', cost: 800, unlock: 60, pen: 1.6 },
@@ -299,7 +353,7 @@ const JUNC = {
 };
 const MONTH_LEN = 10, OUTSIDE_JOBS = 60, CAR_LEN = 5, TRUCK_LEN = 8.5, MAX_CARS = 520;
 const MILESTONES = [100, 250, 500, 1000, 2000, 4000, 8000, 15000];
-const SAVE_KEY = 'cityroads-v3';
+const SAVE_KEY = 'cityroads-v4';
 const LIGHT = (() => { const l = Math.hypot(-0.55, -0.83); return { x: -0.55 / l, y: -0.83 / l }; })();
 const SHX = 0.42, SHY = 0.58;
 const BRUSH = [14, 30, 58], DOZE = [10, 22, 44];
@@ -499,7 +553,9 @@ function fellTrees(test, x0, y0, x1, y1) {
 // =====================================================================
 // polylines & road graph
 // =====================================================================
+// Points carry an elevation z: -1 tunnel, 0 ground, 1 bridge, 2 high bridge (ramps interpolate).
 function polyLen(p) { let L = 0; for (let i = 1; i < p.length; i++) L += dist(p[i - 1].x, p[i - 1].y, p[i].x, p[i].y); return L; }
+const zOf = p => p.z || 0;
 function resample(p, step) {
   const cum = [0];
   for (let i = 1; i < p.length; i++) cum.push(cum[i - 1] + dist(p[i - 1].x, p[i - 1].y, p[i].x, p[i].y));
@@ -509,7 +565,7 @@ function resample(p, step) {
     const s = L * k / n;
     while (j < p.length - 1 && cum[j] < s) j++;
     const seg = cum[j] - cum[j - 1] || 1, t = clamp((s - cum[j - 1]) / seg, 0, 1);
-    out.push({ x: lerp(p[j - 1].x, p[j].x, t), y: lerp(p[j - 1].y, p[j].y, t) });
+    out.push({ x: lerp(p[j - 1].x, p[j].x, t), y: lerp(p[j - 1].y, p[j].y, t), z: lerp(zOf(p[j - 1]), zOf(p[j]), t) });
   }
   return out;
 }
@@ -519,7 +575,8 @@ function chaikin(p, it) {
     const q = [p[0]];
     for (let i = 0; i < p.length - 1; i++) {
       const a = p[i], b = p[i + 1];
-      q.push({ x: a.x * 0.75 + b.x * 0.25, y: a.y * 0.75 + b.y * 0.25 }, { x: a.x * 0.25 + b.x * 0.75, y: a.y * 0.25 + b.y * 0.75 });
+      q.push({ x: a.x * 0.75 + b.x * 0.25, y: a.y * 0.75 + b.y * 0.25, z: zOf(a) * 0.75 + zOf(b) * 0.25 },
+        { x: a.x * 0.25 + b.x * 0.75, y: a.y * 0.25 + b.y * 0.75, z: zOf(a) * 0.25 + zOf(b) * 0.75 });
     }
     q.push(p[p.length - 1]);
     p = q;
@@ -530,7 +587,7 @@ function frameAt(e, i, t) {
   const a = e.pts[i], b = e.pts[i + 1];
   let tx = b.x - a.x, ty = b.y - a.y;
   const l = Math.hypot(tx, ty) || 1; tx /= l; ty /= l;
-  return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t, tx, ty, nx: -ty, ny: tx };
+  return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t, z: a.z + (b.z - a.z) * t, tx, ty, nx: -ty, ny: tx };
 }
 function pointAt(e, s) {
   const c = e.cum, n = e.pts.length;
@@ -540,14 +597,17 @@ function pointAt(e, s) {
   while (hi - lo > 1) { const m = (lo + hi) >> 1; if (c[m] <= s) lo = m; else hi = m; }
   return frameAt(e, lo, (s - c[lo]) / ((c[hi] - c[lo]) || 1));
 }
+const zClass = z => z < -0.3 ? -1 : z > 0.3 ? (z > 1.4 ? 2 : 1) : 0;
 
-function addNode(x, y, id) {
-  const n = { id: id || G.nextId++, x, y, edges: [], ctl: 'yield', queue: [], inside: [], phase: 0, phaseT: 0, streak: 0, lastApp: 0, r: 0, groups: new Map(), allHw: false };
+function addNode(x, y, id, z) {
+  const n = { id: id || G.nextId++, x, y, z: z || 0, edges: [], ctl: 'yield', queue: [], inside: [], phase: 0, phaseT: 0, streak: 0, lastApp: 0, r: 0, groups: new Map(), freeway: false };
   G.nodes.set(n.id, n);
   return n;
 }
 function finalizeEdge(e) {
   const p = e.pts;
+  for (const q of p) if (q.z === undefined) q.z = 0;
+  e.S = specOf(e.spec);
   e.cum = [0];
   for (let i = 1; i < p.length; i++) e.cum.push(e.cum[i - 1] + dist(p[i - 1].x, p[i - 1].y, p[i].x, p[i].y));
   e.len = e.cum[p.length - 1];
@@ -556,29 +616,36 @@ function finalizeEdge(e) {
     let tx = b.x - a.x, ty = b.y - a.y; const l = Math.hypot(tx, ty) || 1; tx /= l; ty /= l;
     return { x: -ty, y: tx };
   });
-  let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
-  for (const q of p) { x0 = Math.min(x0, q.x); y0 = Math.min(y0, q.y); x1 = Math.max(x1, q.x); y1 = Math.max(y1, q.y); }
-  const hw = RT[e.type].w / 2 + 4;
+  let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9, zmax = -9, zmin = 9;
+  for (const q of p) { x0 = Math.min(x0, q.x); y0 = Math.min(y0, q.y); x1 = Math.max(x1, q.x); y1 = Math.max(y1, q.y); zmax = Math.max(zmax, q.z); zmin = Math.min(zmin, q.z); }
+  const hw = e.S.w / 2 + Math.abs(e.S.co) + 4 + Math.max(0, zmax) * 6;
   e.bb = [x0 - hw, y0 - hw, x1 + hw, y1 + hw];
+  e.zmax = zmax; e.zmin = zmin;
+  // runs of the same elevation class, used for drawing layers
+  e.runs = [];
+  let cur = null;
+  for (let i = 0; i < p.length; i++) {
+    const c = zClass(p[i].z);
+    if (!cur || cur.c !== c) { if (cur) cur.s1 = e.cum[i]; cur = { c, s0: i ? e.cum[i] : 0, s1: e.len }; e.runs.push(cur); }
+  }
   e.bridges = [];
   let run = null;
   for (let i = 0; i < p.length; i++) {
-    const w = waterAt(p[i].x, p[i].y);
+    const w = waterAt(p[i].x, p[i].y) && zClass(p[i].z) === 0;
     if (w && !run) run = [Math.max(0, e.cum[i] - 4), 0];
     if (!w && run) { run[1] = Math.min(e.len, e.cum[i] + 4); e.bridges.push(run); run = null; }
   }
   if (run) { run[1] = e.len; e.bridges.push(run); }
-  const L = RT[e.type].lanes;
-  e.lanes = [0, 1].map(() => Array.from({ length: L }, () => []));
+  e.lanes = [Array.from({ length: e.S.f }, () => []), Array.from({ length: e.S.b }, () => [])];
 }
-function addEdge(a, b, pts, type, born) {
+function addEdge(a, b, pts, spec, born) {
   if (a === b) return null;
   const na = G.nodes.get(a), nb = G.nodes.get(b);
   for (const id of na.edges) {
     const o = G.edges.get(id);
     if (((o.a === a && o.b === b) || (o.a === b && o.b === a)) && Math.abs(o.len - polyLen(pts)) < 6) return null;
   }
-  const e = { id: G.nextId++, a, b, type, pts, born: born === undefined ? clock : born };
+  const e = { id: G.nextId++, a, b, spec: { ...spec }, pts, born: born === undefined ? clock : born };
   finalizeEdge(e);
   G.edges.set(e.id, e);
   na.edges.push(e.id); nb.edges.push(e.id);
@@ -599,11 +666,11 @@ function computeNodes() {
   for (const n of G.nodes.values()) {
     const deg = n.edges.length;
     if (deg < 3 && n.ctl !== 'yield') n.ctl = 'yield';
-    let hw = 0, allHw = deg > 0;
-    for (const id of n.edges) { const e = G.edges.get(id); hw = Math.max(hw, RT[e.type].w / 2); if (e.type !== 'highway') allHw = false; }
-    n.allHw = allHw;
-    if (allHw && n.ctl === 'round') n.ctl = 'yield';
-    n.r = deg <= 2 ? 0 : n.ctl === 'round' ? 22 : hw + 2;
+    let hw = 0, fw = deg > 0;
+    for (const id of n.edges) { const e = G.edges.get(id); hw = Math.max(hw, e.S.w / 2 + Math.abs(e.S.co)); if (!e.S.noFront) fw = false; }
+    n.freeway = fw;
+    if (fw && n.ctl === 'round') n.ctl = 'yield';
+    n.r = deg <= 2 ? 0 : n.ctl === 'round' ? Math.max(22, hw + 12) : hw + 2;
     n.groups = new Map();
     let axis = null;
     for (const id of n.edges) {
@@ -620,23 +687,24 @@ function rebuildRoadIndex() {
   segGrid = new Map();
   roadMask = new Uint8Array(NC);
   for (const e of G.edges.values()) {
-    const hw = RT[e.type].w / 2, hwy = e.type === 'highway';
+    const hw = e.S.w / 2;
     e.pts.forEach((p, i) => {
       const k = gkey(Math.floor(p.x / SEG), Math.floor(p.y / SEG));
       let a = segGrid.get(k); if (!a) segGrid.set(k, a = []); a.push(e, i);
-      if (hwy && waterAt(p.x, p.y)) return;
+      if (p.z < -0.3 || p.z > 0.3) return;
+      const cx0 = p.x + e.nrm[i].x * e.S.co, cy0 = p.y + e.nrm[i].y * e.S.co;
       const r = Math.ceil((hw + 3) / CELL);
-      const cx = Math.floor(p.x / CELL), cy = Math.floor(p.y / CELL);
+      const cx = Math.floor(cx0 / CELL), cy = Math.floor(cy0 / CELL);
       for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
         const x = cx + dx, y = cy + dy;
         if (x < 0 || y < 0 || x >= CW || y >= CH) continue;
-        if (dist(x * CELL + 5, y * CELL + 5, p.x, p.y) < hw + 3) roadMask[y * CW + x] = 1;
+        if (dist(x * CELL + 5, y * CELL + 5, cx0, cy0) < hw + 3) roadMask[y * CW + x] = 1;
       }
     });
   }
   computeNodes();
 }
-// nearest point on any road (segment-accurate)
+// nearest point on any road centreline; filter(e, i) can reject segments
 function nearestRoad(x, y, R, filter) {
   let best = null, bd = R;
   const g0x = Math.floor((x - R) / SEG), g1x = Math.floor((x + R) / SEG), g0y = Math.floor((y - R) / SEG), g1y = Math.floor((y + R) / SEG);
@@ -645,12 +713,12 @@ function nearestRoad(x, y, R, filter) {
     if (!a) continue;
     for (let k = 0; k < a.length; k += 2) {
       const e = a[k], i = a[k + 1];
-      if (i >= e.pts.length - 1 || (filter && !filter(e))) continue;
+      if (i >= e.pts.length - 1 || (filter && !filter(e, i))) continue;
       const p = e.pts[i], q = e.pts[i + 1];
       const dx = q.x - p.x, dy = q.y - p.y, l2 = dx * dx + dy * dy || 1;
       const t = clamp(((x - p.x) * dx + (y - p.y) * dy) / l2, 0, 1);
       const px = p.x + dx * t, py = p.y + dy * t, d = dist(x, y, px, py);
-      if (d < bd) { bd = d; best = { e, i, t, x: px, y: py, d, s: e.cum[i] + Math.sqrt(l2) * t }; }
+      if (d < bd) { bd = d; best = { e, i, t, x: px, y: py, z: p.z + (q.z - p.z) * t, d, s: e.cum[i] + Math.sqrt(l2) * t }; }
     }
   }
   return best;
@@ -667,85 +735,111 @@ function splitEdgeAt(hit) {
   const e = hit.e;
   if (hit.s < 4) return e.a;
   if (hit.s > e.len - 4) return e.b;
-  const P0 = { x: hit.x, y: hit.y };
+  const P0 = { x: hit.x, y: hit.y, z: hit.z };
   const p1 = e.pts.slice(0, hit.i + 1), p2 = e.pts.slice(hit.i + 1);
   while (p1.length > 1 && dist(p1[p1.length - 1].x, p1[p1.length - 1].y, P0.x, P0.y) < 1.5) p1.pop();
   while (p2.length > 1 && dist(p2[0].x, p2[0].y, P0.x, P0.y) < 1.5) p2.shift();
-  p1.push(P0); p2.unshift(P0);
-  const n = addNode(P0.x, P0.y);
+  p1.push(P0); p2.unshift({ ...P0 });
+  const n = addNode(P0.x, P0.y, 0, P0.z);
   removeEdge(e, true);
-  addEdge(e.a, n.id, p1, e.type, e.born);
-  addEdge(n.id, e.b, p2, e.type, e.born);
+  addEdge(e.a, n.id, p1, e.spec, e.born);
+  addEdge(n.id, e.b, p2, e.spec, e.born);
   rebuildRoadIndex();
   return n.id;
 }
-function nodeAtPoint(x, y, layerHw) {
-  for (const n of G.nodes.values()) if (dist(n.x, n.y, x, y) < 5) return n.id;
-  const hit = nearestRoad(x, y, 5, layerHw === undefined ? null : e => (e.type === 'highway') === layerHw);
+const sameLevel = (za, zb) => Math.abs(za - zb) < 0.45;
+function nodeAtPoint(x, y, z) {
+  for (const n of G.nodes.values()) if (dist(n.x, n.y, x, y) < 5 && sameLevel(n.z, z)) return n.id;
+  const hit = nearestRoad(x, y, 5, (e, i) => sameLevel(e.pts[i].z, z) || sameLevel(e.pts[i + 1].z, z));
   if (hit) return splitEdgeAt(hit);
-  return addNode(x, y).id;
+  return addNode(x, y, 0, z).id;
 }
 function segX(a, b, c, d) {
   const r1x = b.x - a.x, r1y = b.y - a.y, r2x = d.x - c.x, r2y = d.y - c.y;
   const den = r1x * r2y - r1y * r2x;
   if (Math.abs(den) < 1e-9) return null;
   const t = ((c.x - a.x) * r2y - (c.y - a.y) * r2x) / den, u = ((c.x - a.x) * r1y - (c.y - a.y) * r1x) / den;
-  return t >= 0 && t <= 1 && u >= 0 && u <= 1 ? t : null;
+  return t >= 0 && t <= 1 && u >= 0 && u <= 1 ? [t, u] : null;
 }
 function subPath(pts, cum, s0, s1) {
   const out = [];
   const at = s => {
     let j = 1; while (j < pts.length - 1 && cum[j] < s) j++;
     const t = clamp((s - cum[j - 1]) / ((cum[j] - cum[j - 1]) || 1), 0, 1);
-    return { x: lerp(pts[j - 1].x, pts[j].x, t), y: lerp(pts[j - 1].y, pts[j].y, t) };
+    return { x: lerp(pts[j - 1].x, pts[j].x, t), y: lerp(pts[j - 1].y, pts[j].y, t), z: lerp(pts[j - 1].z, pts[j].z, t) };
   };
   out.push(at(s0));
-  for (let i = 0; i < pts.length; i++) if (cum[i] > s0 + 0.5 && cum[i] < s1 - 0.5) out.push(pts[i]);
+  for (let i = 0; i < pts.length; i++) if (cum[i] > s0 + 0.5 && cum[i] < s1 - 0.5) out.push({ ...pts[i] });
   out.push(at(s1));
   return out;
 }
 
-function roadCost(pts, type) {
-  const T = RT[type];
+// elevation profile: ramp from the start level to the chosen level, hold it, ramp to the end level
+function applyProfile(pts, z0, zMid, z1) {
+  const cum = [0];
+  for (let i = 1; i < pts.length; i++) cum.push(cum[i - 1] + dist(pts[i - 1].x, pts[i - 1].y, pts[i].x, pts[i].y));
+  const L = cum[cum.length - 1], R = Math.min(70, L / 2.2);
+  const sm = t => t * t * (3 - 2 * t);
+  pts.forEach((p, i) => {
+    const s = cum[i];
+    p.z = s < R && z0 !== zMid ? lerp(z0, zMid, sm(s / R)) : s > L - R && z1 !== zMid ? lerp(zMid, z1, sm((s - (L - R)) / R)) : zMid;
+  });
+  return pts;
+}
+function segCostFactor(a, b) {
+  const z = (a.z + b.z) / 2;
+  if (z < -0.3) return 5;
+  if (z > 0.3) return 1.6 + z;
+  return waterAt((a.x + b.x) / 2, (a.y + b.y) / 2) ? 4 : 1;
+}
+function roadCost(pts, spec) {
+  const S = specOf(spec);
   let c = 0;
-  for (let i = 1; i < pts.length; i++) {
-    const l = dist(pts[i - 1].x, pts[i - 1].y, pts[i].x, pts[i].y);
-    c += l * T.cost * (waterAt((pts[i - 1].x + pts[i].x) / 2, (pts[i - 1].y + pts[i].y) / 2) ? 4 : 1);
-  }
+  for (let i = 1; i < pts.length; i++) c += dist(pts[i - 1].x, pts[i - 1].y, pts[i].x, pts[i].y) * S.cost * segCostFactor(pts[i - 1], pts[i]);
   return Math.round(c);
 }
+// roads under water or through water at ground level need a bridge or tunnel; tunnels can't surface in water
+function roadProblem(pts) {
+  for (let i = 0; i < pts.length; i++) {
+    const p = pts[i];
+    if (p.x < -5 || p.y < -5 || p.x > WW + 5 || p.y > WH + 5) return 'That road leaves the map.';
+  }
+  return null;
+}
 
-// build a road along a polyline; splits existing roads where they cross
-function buildRoad(raw, type, snapA, snapB, free) {
+// build a road along a polyline (points carry z); splits roads it meets at the same level
+function buildRoad(raw, spec, snapA, snapB, free) {
+  if (typeof spec === 'string') spec = PRESETS[spec];
   const pts = resample(raw, 5);
   const L = polyLen(pts);
   if (L < 12) return false;
-  const cost = roadCost(pts, type);
+  const prob = roadProblem(pts);
+  if (prob) { toast(prob, 'bad'); return false; }
+  const cost = roadCost(pts, spec);
   if (!free && cost > G.money) { toast(`Not enough funds: this road costs $${fmt(cost)}`, 'bad'); return false; }
-  const hwy = type === 'highway';
   const cum = [0];
   for (let i = 1; i < pts.length; i++) cum.push(cum[i - 1] + dist(pts[i - 1].x, pts[i - 1].y, pts[i].x, pts[i].y));
   const cross = [];
   const nbb = [1e9, 1e9, -1e9, -1e9];
   for (const p of pts) { nbb[0] = Math.min(nbb[0], p.x); nbb[1] = Math.min(nbb[1], p.y); nbb[2] = Math.max(nbb[2], p.x); nbb[3] = Math.max(nbb[3], p.y); }
   for (const e of G.edges.values()) {
-    if ((e.type === 'highway') !== hwy) continue;
     if (e.bb[0] > nbb[2] || e.bb[2] < nbb[0] || e.bb[1] > nbb[3] || e.bb[3] < nbb[1]) continue;
     for (let i = 0; i < pts.length - 1; i++) for (let k = 0; k < e.pts.length - 1; k++) {
-      const t = segX(pts[i], pts[i + 1], e.pts[k], e.pts[k + 1]);
-      if (t === null) continue;
-      cross.push({ pos: cum[i] + t * (cum[i + 1] - cum[i]), x: lerp(pts[i].x, pts[i + 1].x, t), y: lerp(pts[i].y, pts[i + 1].y, t) });
+      const tu = segX(pts[i], pts[i + 1], e.pts[k], e.pts[k + 1]);
+      if (!tu) continue;
+      const zn = lerp(pts[i].z, pts[i + 1].z, tu[0]), ze = lerp(e.pts[k].z, e.pts[k + 1].z, tu[1]);
+      if (!sameLevel(zn, ze)) continue; // passes over or under
+      cross.push({ pos: cum[i] + tu[0] * (cum[i + 1] - cum[i]), x: lerp(pts[i].x, pts[i + 1].x, tu[0]), y: lerp(pts[i].y, pts[i + 1].y, tu[0]), z: zn });
     }
   }
-  // pass through existing junction points too
+  // pass through existing junction points at the same level
   for (const n of G.nodes.values()) {
     if ((snapA && snapA.node === n.id) || (snapB && snapB.node === n.id)) continue;
-    const compatible = n.edges.length <= 1 || n.edges.some(id => (G.edges.get(id).type === 'highway') === hwy);
-    if (!compatible || n.x < nbb[0] - 5 || n.x > nbb[2] + 5 || n.y < nbb[1] - 5 || n.y > nbb[3] + 5) continue;
+    if (n.x < nbb[0] - 5 || n.x > nbb[2] + 5 || n.y < nbb[1] - 5 || n.y > nbb[3] + 5) continue;
     for (let i = 0; i < pts.length - 1; i++) {
       const a = pts[i], b = pts[i + 1], dx = b.x - a.x, dy = b.y - a.y, l2 = dx * dx + dy * dy || 1;
       const t = clamp(((n.x - a.x) * dx + (n.y - a.y) * dy) / l2, 0, 1);
-      if (dist(n.x, n.y, a.x + dx * t, a.y + dy * t) < 4) { cross.push({ pos: cum[i] + t * Math.sqrt(l2), x: n.x, y: n.y }); break; }
+      if (dist(n.x, n.y, a.x + dx * t, a.y + dy * t) < 4 && sameLevel(lerp(a.z, b.z, t), n.z)) { cross.push({ pos: cum[i] + t * Math.sqrt(l2), x: n.x, y: n.y, z: n.z }); break; }
     }
   }
   cross.sort((a, b) => a.pos - b.pos);
@@ -757,18 +851,19 @@ function buildRoad(raw, type, snapA, snapB, free) {
   }
   if (!free) G.money -= cost;
   opRemoved = new Set();
-  const nA = snapA && snapA.node && G.nodes.has(snapA.node) ? snapA.node : nodeAtPoint(pts[0].x, pts[0].y);
-  const midIds = mids.map(c => nodeAtPoint(c.x, c.y, hwy));
-  const nB = snapB && snapB.node && G.nodes.has(snapB.node) ? snapB.node : nodeAtPoint(pts[pts.length - 1].x, pts[pts.length - 1].y);
+  const first = pts[0], last = pts[pts.length - 1];
+  const nA = snapA && snapA.node && G.nodes.has(snapA.node) ? snapA.node : nodeAtPoint(first.x, first.y, first.z);
+  const midIds = mids.map(c => nodeAtPoint(c.x, c.y, c.z));
+  const nB = snapB && snapB.node && G.nodes.has(snapB.node) ? snapB.node : nodeAtPoint(last.x, last.y, last.z);
   const ids = [nA, ...midIds, nB], pos = [0, ...mids.map(m => m.pos), L];
   const made = [];
   for (let k = 0; k < ids.length - 1; k++) {
     if (ids[k] === ids[k + 1]) continue;
     const sp = subPath(pts, cum, pos[k], pos[k + 1]);
     const na = G.nodes.get(ids[k]), nb = G.nodes.get(ids[k + 1]);
-    sp[0] = { x: na.x, y: na.y }; sp[sp.length - 1] = { x: nb.x, y: nb.y };
+    sp[0] = { x: na.x, y: na.y, z: na.z }; sp[sp.length - 1] = { x: nb.x, y: nb.y, z: nb.z };
     if (polyLen(sp) < 3) continue;
-    const e = addEdge(ids[k], ids[k + 1], sp, type, clock + (pos[k] / Math.max(1, L)) * 0.35);
+    const e = addEdge(ids[k], ids[k + 1], sp, spec, clock + (pos[k] / Math.max(1, L)) * 0.35);
     if (e) made.push(e);
   }
   for (const n of [...G.nodes.values()]) if (!n.edges.length && n.id !== G.outside) G.nodes.delete(n.id);
@@ -778,16 +873,22 @@ function buildRoad(raw, type, snapA, snapB, free) {
   return true;
 }
 
+function clearUnderRoad(e) {
+  const hw = e.S.w / 2;
+  const onGround = (x, y, r) => !!nearestRoad(x, y, hw + Math.abs(e.S.co) + r + 1, (q, i) => q === e && e.pts[i].z > -0.3);
+  fellTrees(onGround, e.bb[0], e.bb[1], e.bb[2], e.bb[3]);
+  forLotsIn(e.bb[0], e.bb[1], e.bb[2], e.bb[3], lot => {
+    for (let i = 0; i < e.pts.length; i++) {
+      const p = e.pts[i];
+      if (p.z < -0.3) continue;
+      const cx = p.x + e.nrm[i].x * e.S.co, cy = p.y + e.nrm[i].y * e.S.co;
+      if (pointInLot(lot, cx, cy, hw + 0.5)) { removeLot(lot, true); return; }
+    }
+  });
+}
 function afterRoadChange(made, bb) {
   killCarsOn(opRemoved);
-  // clear trees and lots under new roads
-  for (const e of made) {
-    const hw = RT[e.type].w / 2;
-    fellTrees((x, y, r) => !!nearestRoad(x, y, hw + r + 1, q => q === e), e.bb[0], e.bb[1], e.bb[2], e.bb[3]);
-    forLotsIn(e.bb[0], e.bb[1], e.bb[2], e.bb[3], lot => {
-      for (const p of e.pts) if (pointInLot(lot, p.x, p.y, hw + 0.5)) { removeLot(lot, true); return; }
-    });
-  }
+  for (const e of made) clearUnderRoad(e);
   rebuildTreeGrid();
   reattachAll();
   genLotsIn(bb[0] - 60, bb[1] - 60, bb[2] + 60, bb[3] + 60);
@@ -802,6 +903,31 @@ function removeEdges(list) {
   reattachAll();
   parksDirty = true; parksTimer = 0;
   changed();
+}
+// restyle an existing road with a new design (or flip a one-way)
+function upgradeEdge(e, spec) {
+  const same = specOf(spec).key === e.S.key;
+  if (same && !e.S.oneway) { toast('That road already uses this design.'); return false; }
+  const oldCost = roadCost(e.pts, e.spec), newCost = roadCost(e.pts, spec);
+  const cost = same ? 50 : Math.max(50, newCost - Math.round(oldCost * 0.5));
+  if (cost > G.money) { toast(`Not enough funds: this upgrade costs $${fmt(cost)}`, 'bad'); return false; }
+  G.money -= cost;
+  opRemoved = new Set([e.id]);
+  killCarsOn(opRemoved);
+  if (same) { const t = e.a; e.a = e.b; e.b = t; e.pts.reverse(); }
+  else e.spec = { ...spec };
+  e.born = clock;
+  finalizeEdge(e);
+  rebuildRoadIndex();
+  clearUnderRoad(e);
+  rebuildTreeGrid();
+  reattachAll();
+  genLotsIn(e.bb[0] - 40, e.bb[1] - 40, e.bb[2] + 40, e.bb[3] + 40);
+  parksDirty = true; parksTimer = 0;
+  changed();
+  sfx('road');
+  toast(same ? `One-way reversed for $${fmt(cost)}.` : `Rebuilt as ${e.S.name} for $${fmt(cost)}.`);
+  return true;
 }
 function changed() { G.ver++; lotsDirty = true; fillCache = null; }
 
@@ -844,8 +970,9 @@ function lotFits(l) {
   let hit = false;
   forRoadPts(l.x - r, l.y - r, l.x + r, l.y + r, (e, i) => {
     if (hit) return;
-    const p = e.pts[i], hw = RT[e.type].w / 2;
-    const [lx, ly] = toLocal(l, p.x, p.y);
+    const p = e.pts[i], hw = e.S.w / 2;
+    if (p.z < -0.3) return;
+    const [lx, ly] = toLocal(l, p.x + e.nrm[i].x * e.S.co, p.y + e.nrm[i].y * e.S.co);
     if (Math.abs(lx) < l.w / 2 + hw + 0.5 && Math.abs(ly) < l.d / 2 + hw + 0.5) hit = true;
   });
   if (hit) return false;
@@ -878,22 +1005,24 @@ function removeLot(l, fx) {
 }
 function attachLot(l) {
   const [fx, fy] = toWorld(l, 0, -l.d / 2);
-  const h = nearestRoad(fx, fy, 16, e => !RT[e.type].noFront);
+  const h = nearestRoad(fx, fy, 16 + 4, (e, i) => !e.S.noFront && Math.abs(e.pts[i].z) < 0.3);
   l.attach = h ? { e: h.e.id, s: h.s } : null;
-  l.avenue = !!(h && h.e.type === 'avenue');
+  l.avenue = !!(h && h.e.S.lanes >= 4);
 }
 function reattachAll() {
   for (const l of [...G.lots.values()]) { attachLot(l); if (!l.attach && !l.b) removeLot(l, false); }
 }
 
 function genLotsAlong(e) {
-  const T = RT[e.type];
+  const T = e.S;
   if (T.noFront) return;
-  const hw = T.w / 2, s0 = trimOf(e.a) + 2, s1 = e.len - trimOf(e.b) - 2;
+  const s0 = trimOf(e.a) + 2, s1 = e.len - trimOf(e.b) - 2;
   for (const side of [1, -1]) {
+    const hw = T.w / 2 + side * T.co;
     let s = s0;
     while (s < s1 - 10) {
       const p = pointAt(e, s + 5);
+      if (Math.abs(p.z) > 0.3 || Math.abs(pointAt(e, s + 15).z) > 0.3) { s += 5; continue; }
       const z = zoneAt(p.x + p.nx * side * (hw + 5), p.y + p.ny * side * (hw + 5));
       if (z < ZR || z > ZI) { s += 5; continue; }
       const cfg = LOTCFG[z], h = hash(Math.round(p.x), Math.round(p.y), G.seed + z);
@@ -1250,7 +1379,7 @@ function autoLane(x0, y0, x1, y1) {
     const a = k / 24 * Math.PI * 2 + hash(k, best.length, G.seed) * 0.1, ux = Math.cos(a), uy = Math.sin(a);
     for (let t = 6; t < 320; t += 5) {
       const x = mx + ux * t, y = my + uy * t;
-      const r = nearestRoad(x, y, 6, e => e.type !== 'highway');
+      const r = nearestRoad(x, y, 6, (e, i) => !e.S.noFront && Math.abs(e.pts[i].z) < 0.3);
       if (r) { if (!hit || t < hit.t) hit = { t, x: r.x, y: r.y, ux: -ux, uy: -uy }; break; }
       const z = zoneAt(x, y);
       if (waterAt(x, y) || (z !== zc && !nearestRoad(x, y, 16))) break;
@@ -1267,7 +1396,7 @@ function autoLane(x0, y0, x1, y1) {
   const mid = { x: (hit.x + end.x) / 2 - uy * bend, y: (hit.y + end.y) / 2 + ux * bend };
   const pts = quadPts({ x: hit.x, y: hit.y }, mid, end);
   if (pts.some((p, i) => waterAt(p.x, p.y) || p.x < 5 || p.y < 5 || p.x > WW - 5 || p.y > WH - 5 || (i > 3 && zoneAt(p.x, p.y) !== zc))) return false;
-  return buildRoad(pts, 'lane', null, null, true);
+  return buildRoad(pts, LANE_SPEC, null, null, true);
 }
 const FILL_LIMIT = 6000;
 function floodCells(x, y) {
@@ -1395,8 +1524,8 @@ function computeLV() {
   for (const e of G.edges.values()) {
     const cnt = laneCount(e, 0) + laneCount(e, 1);
     const dens = cnt / Math.max(1, e.len / 9);
-    const hw = e.type === 'highway';
-    for (let i = 0; i < e.pts.length; i += 6) splat(noise, e.pts[i].x, e.pts[i].y, 1, (hw ? 1.6 : 0) + dens * 4);
+    const hw = e.S.freeway;
+    for (let i = 0; i < e.pts.length; i += 6) if (e.pts[i].z > -0.3) splat(noise, e.pts[i].x, e.pts[i].y, 1, (hw ? 1.6 : 0) + dens * 4);
   }
   lvGrid = new Float32Array(LW * LH);
   for (let i = 0; i < LW * LH; i++)
@@ -1477,7 +1606,7 @@ function endOfMonth() {
   const eff = 0.55 + 0.45 * clamp(G.flow / 100, 0, 1);
   const income = Math.round((G.pop * 1.0 + (G.jc + G.ji) * 0.7) * eff);
   let upkeep = 0;
-  for (const e of G.edges.values()) upkeep += e.len * RT[e.type].up;
+  for (const e of G.edges.values()) upkeep += e.len * e.S.up * (e.zmax > 0.3 || e.zmin < -0.3 ? 1.6 : 1);
   for (const n of G.nodes.values()) if (n.ctl === 'lights') upkeep += 6; else if (n.ctl === 'round') upkeep += 3;
   let parkCells = 0;
   for (let c = 0; c < NC; c++) if (G.zone[c] === ZP) parkCells++;
@@ -1496,10 +1625,8 @@ function checkUnlocks() {
   const un = (key, cond, msg) => { if (!G.unlocked[key] && cond) { G.unlocked[key] = true; toast(msg, 'good'); syncLocks(); } };
   un('lights', G.pop >= JUNC.lights.unlock, 'Traffic lights unlocked. Use the Junctions tool on a busy crossing.');
   un('round', G.pop >= JUNC.round.unlock, 'Roundabouts unlocked. They keep traffic moving without stopping.');
-  un('avenue', G.pop >= RT.avenue.unlock, 'Avenues unlocked: two lanes each way.');
-  un('highway', G.pop >= RT.highway.unlock, 'Highways unlocked. They pass over other roads without junctions.');
 }
-const isUnlocked = key => !G || G.unlocked[key] || (RT[key] ? RT[key].unlock === 0 : JUNC[key].unlock === 0);
+const isUnlocked = key => !G || G.unlocked[key] || JUNC[key].unlock === 0;
 
 // =====================================================================
 // traffic: routing
@@ -1536,12 +1663,12 @@ function planRoute(src, dst) {
   if (src.node !== undefined) relax(src.node, 0, null, null);
   else {
     const e = G.edges.get(src.e); if (!e) return null;
-    const sp = RT[e.type].speed;
+    const sp = e.S.speed;
     relax(e.b, (e.len - src.s) / sp, null, { e: e.id, d: 0, a0: src.s });
-    if (!RT[e.type].oneway) relax(e.a, src.s / sp, null, { e: e.id, d: 1, a0: e.len - src.s });
+    if (!e.S.oneway) relax(e.a, src.s / sp, null, { e: e.id, d: 1, a0: e.len - src.s });
     if (dst.e === src.e) {
       if (dst.s > src.s + 2) direct = { cost: (dst.s - src.s) / sp, legs: [{ e: e.id, d: 0, a0: src.s, a1: dst.s }] };
-      else if (!RT[e.type].oneway && dst.s < src.s - 2) direct = { cost: (src.s - dst.s) / sp, legs: [{ e: e.id, d: 1, a0: e.len - src.s, a1: e.len - dst.s }] };
+      else if (!e.S.oneway && dst.s < src.s - 2) direct = { cost: (src.s - dst.s) / sp, legs: [{ e: e.id, d: 1, a0: e.len - src.s, a1: e.len - dst.s }] };
       if (direct) bestCost = direct.cost;
     }
   }
@@ -1549,10 +1676,10 @@ function planRoute(src, dst) {
   if (dst.e !== undefined) { de = G.edges.get(dst.e); if (!de) return null; }
   const endCost = n => {
     if (dst.node !== undefined) return n === dst.node ? { c: 0, leg: null } : null;
-    const sp = RT[de.type].speed;
+    const sp = de.S.speed;
     let best = null;
     if (n === de.a) best = { c: dst.s / sp, leg: { e: de.id, d: 0, a1: dst.s } };
-    if (n === de.b && !RT[de.type].oneway) { const c = (de.len - dst.s) / sp; if (!best || c < best.c) best = { c, leg: { e: de.id, d: 1, a1: de.len - dst.s } }; }
+    if (n === de.b && !de.S.oneway) { const c = (de.len - dst.s) / sp; if (!best || c < best.c) best = { c, leg: { e: de.id, d: 1, a1: de.len - dst.s } }; }
     return best;
   };
   while (heap.size) {
@@ -1566,8 +1693,8 @@ function planRoute(src, dst) {
     for (const id of node.edges) {
       const e = G.edges.get(id);
       let d, m;
-      if (e.a === n) { d = 0; m = e.b; } else { if (RT[e.type].oneway) continue; d = 1; m = e.a; }
-      const T = RT[e.type], cnt = laneCount(e, d), cap = Math.max(1, e.len / 7 * T.lanes);
+      if (e.a === n) { d = 0; m = e.b; } else { if (e.S.oneway) continue; d = 1; m = e.a; }
+      const T = e.S, cnt = laneCount(e, d), cap = Math.max(1, e.len / 7 * e.lanes[d].length);
       const cost = e.len / T.speed * (1 + 1.8 * cnt / cap) + nodePenalty(G.nodes.get(m));
       relax(m, c + cost, { n, e: id, d }, null);
     }
@@ -1584,7 +1711,7 @@ function planRoute(src, dst) {
   if (bestEnd.leg) legs.push(bestEnd.leg);
   if (!legs.length) return null;
   let free = 0;
-  for (const lg of legs) { const e = G.edges.get(lg.e); free += (legU1(e, lg) - legU0(e, lg)) / RT[e.type].speed; }
+  for (const lg of legs) { const e = G.edges.get(lg.e); free += (legU1(e, lg) - legU0(e, lg)) / e.S.speed; }
   free += mid.length * 0.4;
   return { legs, free: Math.max(1, free) };
 }
@@ -1592,22 +1719,21 @@ function planRoute(src, dst) {
 // =====================================================================
 // traffic: cars
 // =====================================================================
-function laneOff(type, lane) {
-  const T = RT[type];
-  if (T.oneway) { const lw = T.w / T.lanes; return (lane - (T.lanes - 1) / 2) * lw; }
-  const lw = T.w / (2 * T.lanes);
-  return (lane + 0.5) * lw;
+// offset of a lane's centre to the right of its direction of travel (lane 0 is next to the median)
+function laneOff(S, lane) {
+  if (S.oneway) return (lane - (S.f - 1) / 2) * S.lw;
+  return S.medW / 2 + (lane + 0.5) * S.lw;
 }
 function posOnEdge(e, d, u, lane) {
   const f = pointAt(e, d ? e.len - u : u);
-  const dx = d ? -f.tx : f.tx, dy = d ? -f.ty : f.ty, off = laneOff(e.type, lane);
-  return { x: f.x - dy * off, y: f.y + dx * off, dx, dy };
+  const dx = d ? -f.tx : f.tx, dy = d ? -f.ty : f.ty, off = laneOff(e.S, lane);
+  return { x: f.x - dy * off, y: f.y + dx * off, z: f.z, dx, dy };
 }
 function spawnCar(src, dst, home, truck) {
   const r = planRoute(src, dst);
   if (!r) return null;
   const leg = r.legs[0], e = G.edges.get(leg.e);
-  const u0 = legU0(e, leg), L = RT[e.type].lanes;
+  const u0 = legU0(e, leg), L = e.lanes[leg.d].length;
   let lane = -1;
   const off = (Math.random() * L) | 0;
   for (let k = 0; k < L; k++) {
@@ -1687,7 +1813,7 @@ function canEnter(n, c) {
   if (deg <= 2) return true;
   const app = c.legs[c.li].e, ins = n.inside;
   if (n.ctl === 'round') return ins.length < deg + 1;
-  if (n.allHw) return ins.length < 3;
+  if (n.freeway) return ins.length < 3;
   if (n.ctl === 'lights') {
     if (n.phaseT > 6.6) return false;
     if (n.groups.get(app) !== n.phase) return false;
@@ -1703,7 +1829,7 @@ function canEnter(n, c) {
 function pickNextLane(c) {
   const nx = c.legs[c.li + 1], e = G.edges.get(nx.e);
   if (!e) return -1;
-  const u0 = legU0(e, nx), L = RT[e.type].lanes;
+  const u0 = legU0(e, nx), L = e.lanes[nx.d].length;
   let best = -1, bestGap = 7.5;
   for (let l = 0; l < L; l++) {
     let gap = Infinity;
@@ -1731,7 +1857,7 @@ function startCross(c, n, lane) {
   const cr = { p0: A, p1: { x: A.x + A.dx * k, y: A.y + A.dy * k }, p2: { x: B.x - B.dx * k, y: B.y - B.dy * k }, p3: B, t: 0, node: n.id, lane };
   cr.len = Math.max(0.3, (D + dist(A.x, A.y, cr.p1.x, cr.p1.y) + dist(cr.p1.x, cr.p1.y, cr.p2.x, cr.p2.y) + dist(cr.p2.x, cr.p2.y, B.x, B.y)) / 2);
   const deg = n.edges.length;
-  const vt = Math.min(RT[e1.type].speed, RT[e2.type].speed) * (n.ctl === 'round' ? 0.55 : n.ctl === 'lights' ? 0.6 : 0.45);
+  const vt = Math.min(e1.S.speed, e2.S.speed) * (n.ctl === 'round' ? 0.55 : n.ctl === 'lights' ? 0.6 : 0.45);
   c.v = deg <= 2 ? Math.max(c.v, 6) : Math.max(vt, 6);
   c.cr = cr; c.st = 'n'; c.q = false; c.app = cur.e;
   if (deg > 2) { const grp = n.groups.get(cur.e); if (n.lastApp === grp) n.streak++; else { n.streak = 0; n.lastApp = grp; } }
@@ -1743,19 +1869,25 @@ function finishCross(c) {
   c.li++;
   const leg = c.legs[c.li], e = leg && G.edges.get(leg.e);
   if (!e) { c.dead = true; return; }
-  c.u = legU0(e, leg); c.lane = c.cr.lane; c.st = 'e'; c.cr = null;
+  c.u = legU0(e, leg); c.lane = c.cr.lane; c.st = 'e'; c.cr = null; c.lcT = 0;
   e.lanes[leg.d][c.lane].push(c);
 }
 function carPose(c) {
-  if (c.st === 'n') { const b = bez(c.cr, c.cr.t); const l = Math.hypot(b.dx, b.dy) || 1; return { x: b.x, y: b.y, dx: b.dx / l, dy: b.dy / l }; }
+  if (c.st === 'n') { const b = bez(c.cr, c.cr.t); const l = Math.hypot(b.dx, b.dy) || 1; return { x: b.x, y: b.y, z: lerp(c.cr.p0.z, c.cr.p3.z, c.cr.t), dx: b.dx / l, dy: b.dy / l }; }
   const leg = c.legs[c.li], e = G.edges.get(leg.e);
   if (!e) return null;
-  return posOnEdge(e, leg.d, c.u, c.lane);
+  const p = posOnEdge(e, leg.d, c.u, c.lane);
+  if (c.lcT > 0 && c.prevLane !== undefined && c.prevLane < e.lanes[leg.d].length) {
+    const q = posOnEdge(e, leg.d, c.u, c.prevLane), t = easeOut(1 - c.lcT);
+    p.x = lerp(q.x, p.x, t); p.y = lerp(q.y, p.y, t);
+  }
+  return p;
 }
 function stepCars(dt) {
   let sv = 0, sf = 0;
+  const moves = [];
   for (const e of G.edges.values()) {
-    const T = RT[e.type];
+    const T = e.S;
     for (let d = 0; d < 2; d++) for (const q of e.lanes[d]) {
       if (q.length > 1) q.sort((a, b) => b.u - a.u);
       for (let k = 0; k < q.length; k++) {
@@ -1767,6 +1899,14 @@ function stepCars(dt) {
         const ll = lead ? (lead.truck ? TRUCK_LEN : CAR_LEN) : 0;
         let room = Infinity;
         if (lead) room = lead.u - ll - 1.4 - c.u;
+        c.lcT = Math.max(0, (c.lcT || 0) - dt * 1.8); c.lcCool = (c.lcCool || 0) - dt;
+        // overtake: hop to a free neighbouring lane when stuck behind someone
+        if (lead && room < 14 && e.lanes[d].length > 1 && !c.q && c.lcCool <= 0 && c.u < u1 - 12) {
+          for (const nl of [c.lane - 1, c.lane + 1]) {
+            if (nl < 0 || nl >= e.lanes[d].length) continue;
+            if (e.lanes[d][nl].every(o => o.u < c.u - 8 || o.u > c.u + 14)) { moves.push([c, e, d, nl]); c.lcCool = 1.5; break; }
+          }
+        }
         if (!last) room = Math.min(room, u1 - c.u);
         const vAllow = Math.sqrt(Math.max(0, 2 * 60 * Math.max(0, room - 0.4)));
         c.v = Math.max(0, Math.min(vmax, vAllow, c.v + 30 * dt));
@@ -1783,6 +1923,13 @@ function stepCars(dt) {
         if (c.wait > 45) c.gaveUp = true;
       }
     }
+  }
+  for (const [c, e, d, nl] of moves) {
+    if (c.dead || c.st !== 'e') continue;
+    const q = e.lanes[d][c.lane], i = q.indexOf(c);
+    if (i < 0) continue;
+    q.splice(i, 1); e.lanes[d][nl].push(c);
+    c.prevLane = c.lane; c.lane = nl; c.lcT = 1;
   }
   for (const n of G.nodes.values()) {
     if (n.ctl === 'lights') { n.phaseT += dt; if (n.phaseT > 8) { n.phaseT = 0; n.phase ^= 1; } }
@@ -1846,10 +1993,10 @@ function serialize() {
   const alive = new Uint8Array(G.trees.length);
   G.trees.forEach((t, i) => { alive[i] = t.alive ? 1 : 0; });
   return {
-    v: 3, seed: G.seed, name: G.name, money: G.money, time: G.time, month: G.month, monthAcc: G.monthAcc, net: G.net, milestone: G.milestone,
+    v: 4, seed: G.seed, name: G.name, money: G.money, time: G.time, month: G.month, monthAcc: G.monthAcc, net: G.net, milestone: G.milestone,
     unlocked: G.unlocked, outside: G.outside, nextId: G.nextId, commute: G.commute,
-    nodes: [...G.nodes.values()].map(n => [n.id, r1(n.x), r1(n.y), n.ctl]),
-    edges: [...G.edges.values()].map(e => [e.id, e.a, e.b, e.type, e.pts.flatMap(p => [r1(p.x), r1(p.y)])]),
+    nodes: [...G.nodes.values()].map(n => [n.id, r1(n.x), r1(n.y), n.ctl, r1(n.z)]),
+    edges: [...G.edges.values()].map(e => [e.id, e.a, e.b, e.spec, e.pts.flatMap(p => [r1(p.x), r1(p.y), Math.round(p.z * 100) / 100])]),
     lots: [...G.lots.values()].map(l => [r1(l.x), r1(l.y), l.xa.x, l.xa.y, l.ya.x, l.ya.y, r1(l.w), r1(l.d), l.z, l.b ? l.b.level : 0, l.b && l.b.abandoned ? 1 : 0]),
     zone: toB64(G.zone), trees: toB64(alive),
   };
@@ -1875,8 +2022,8 @@ function foundCity(seed) {
   G.outside = out.id;
   const cy = hy + (hash(1, 1, seed) - 0.5) * 70, curve = [];
   for (let k = 0; k <= 20; k++) { const t = k / 20; curve.push({ x: lerp(lerp(0, 160, t), lerp(160, 320, t), t), y: lerp(lerp(hy, cy, t), lerp(cy, hy, t), t) }); }
-  buildRoad(curve, 'highway', { node: out.id }, null, true);
-  buildRoad([{ x: 320, y: hy - 110 }, { x: 320, y: hy + 110 }], 'street', null, null, true);
+  buildRoad(curve, { ...PRESETS.freeway, f: 2, b: 2 }, { node: out.id }, null, true);
+  buildRoad([{ x: 320, y: hy - 110 }, { x: 320, y: hy + 110 }], PRESETS.street, null, null, true);
   for (const e of G.edges.values()) e.born = -99;
   finishBoot();
 }
@@ -1886,7 +2033,6 @@ function finishBoot() {
   regenParks();
   census(); computeLV();
   for (const k of ['lights', 'round']) if (G.pop >= JUNC[k].unlock) G.unlocked[k] = true;
-  for (const k of ['avenue', 'highway']) if (G.pop >= RT[k].unlock) G.unlocked[k] = true;
   syncLocks();
   $('cityName').value = G.name;
   setSpeed(1);
@@ -1899,10 +2045,10 @@ function loadCity(d) {
   const alive = fromB64(d.trees);
   G.trees.forEach((t, i) => { t.alive = alive[i] !== 0; });
   G.nextId = d.nextId;
-  for (const [id, x, y, ctl] of d.nodes) addNode(x, y, id).ctl = ctl;
-  for (const [id, a, b, type, flat] of d.edges) {
-    const pts = []; for (let i = 0; i < flat.length; i += 2) pts.push({ x: flat[i], y: flat[i + 1] });
-    const e = { id, a, b, type, pts, born: -99 };
+  for (const [id, x, y, ctl, z] of d.nodes) addNode(x, y, id, z || 0).ctl = ctl;
+  for (const [id, a, b, spec, flat] of d.edges) {
+    const pts = []; for (let i = 0; i < flat.length; i += 3) pts.push({ x: flat[i], y: flat[i + 1], z: flat[i + 2] });
+    const e = { id, a, b, spec, pts, born: -99 };
     finalizeEdge(e); G.edges.set(id, e);
     G.nodes.get(a).edges.push(id); G.nodes.get(b).edges.push(id);
   }
@@ -1949,84 +2095,131 @@ let view = { x0: 0, y0: 0, x1: 0, y1: 0 };
 const inView = (x, y, m) => x > view.x0 - m && x < view.x1 + m && y > view.y0 - m && y < view.y1 + m;
 const edgeVisible = e => !(e.bb[0] > view.x1 || e.bb[2] < view.x0 || e.bb[1] > view.y1 || e.bb[3] < view.y0);
 
-function edgePath(e, s0, s1, off) {
+const LIFT = 4; // screen lift per elevation level, in world units
+// pathMode: 0 = lifted drawing position, 1 = ground position, 2 = cast shadow
+function edgePath(e, s0, s1, off, mode) {
   if (s1 - s0 < 0.01) return;
   const p = e.pts, c = e.cum;
+  const put = (x, y, z, first) => {
+    let X = x, Y = y;
+    if (mode === 2) { const h = Math.max(0, z) * LIFT; X += h * 0.9; Y += h * 1.2; }
+    else if (mode !== 1) Y -= Math.max(0, z) * LIFT;
+    if (first) ctx.moveTo(X, Y); else ctx.lineTo(X, Y);
+  };
   const f0 = pointAt(e, s0);
-  ctx.moveTo(f0.x + f0.nx * off, f0.y + f0.ny * off);
+  put(f0.x + f0.nx * off, f0.y + f0.ny * off, f0.z, true);
   for (let i = 1; i < p.length - 1; i++) {
     if (c[i] <= s0) continue;
     if (c[i] >= s1) break;
-    ctx.lineTo(p[i].x + e.nrm[i].x * off, p[i].y + e.nrm[i].y * off);
+    put(p[i].x + e.nrm[i].x * off, p[i].y + e.nrm[i].y * off, p[i].z, false);
   }
   const f1 = pointAt(e, s1);
-  ctx.lineTo(f1.x + f1.nx * off, f1.y + f1.ny * off);
+  put(f1.x + f1.nx * off, f1.y + f1.ny * off, f1.z, false);
 }
 const edgeProg = e => clamp((clock - e.born) / (0.25 + e.len / 1400), 0, 1);
+const lift = z => Math.max(0, z) * LIFT;
 
-function drawRoads(hwLayer) {
-  const list = [];
-  for (const e of G.edges.values()) if ((e.type === 'highway') === hwLayer && edgeVisible(e)) list.push(e);
-  if (!list.length) return;
+// draw every road run of one elevation class: -1 tunnels, 0 ground, 1 bridges, 2 high bridges
+function drawRoads(layer) {
+  const runs = [];
+  for (const e of G.edges.values()) {
+    if (!edgeVisible(e)) continue;
+    const p = edgeProg(e);
+    if (p <= 0) continue;
+    for (const r of e.runs) if (r.c === layer && r.s0 < e.len * p) runs.push([e, r.s0, Math.min(r.s1, e.len * p), p]);
+  }
   ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-  const strokeAll = (color, widthOf, ox, oy) => {
-    for (const e of list) {
+  const grow = p => 0.4 + 0.6 * easeOut(Math.min(1, p * 3));
+  if (layer === -1) {
+    // tunnels: a faint ghost of the route, with portals where they meet the surface
+    ctx.globalAlpha = 0.28;
+    for (const [e, a, b] of runs) { ctx.beginPath(); edgePath(e, a, b, e.S.co, 1); ctx.strokeStyle = P.road; ctx.lineWidth = e.S.w; ctx.setLineDash([5, 4]); ctx.stroke(); }
+    ctx.setLineDash([]); ctx.globalAlpha = 1;
+    for (const e of G.edges.values()) {
+      if (!edgeVisible(e)) continue;
+      for (let k = 1; k < e.runs.length; k++) {
+        const r0 = e.runs[k - 1], r1 = e.runs[k];
+        if (r0.c !== -1 && r1.c !== -1) continue;
+        const f = pointAt(e, r1.s0), w = e.S.w + 3;
+        ctx.strokeStyle = '#22252b'; ctx.lineWidth = 3.5; ctx.lineCap = 'butt';
+        ctx.beginPath();
+        const cx = f.x + f.nx * e.S.co, cy = f.y + f.ny * e.S.co;
+        ctx.moveTo(cx - f.nx * w / 2, cy - f.ny * w / 2); ctx.lineTo(cx + f.nx * w / 2, cy + f.ny * w / 2); ctx.stroke();
+        ctx.lineCap = 'round';
+      }
+    }
+    return;
+  }
+  if (layer === 0) {
+    ctx.lineCap = 'butt';
+    for (const e of G.edges.values()) {
+      if (!edgeVisible(e)) continue;
       const p = edgeProg(e);
-      if (p <= 0) continue;
-      ctx.beginPath();
-      if (ox) { ctx.save(); ctx.translate(ox, oy); }
-      edgePath(e, 0, e.len * p, 0);
-      ctx.strokeStyle = color; ctx.lineWidth = widthOf(e) * (0.4 + 0.6 * easeOut(Math.min(1, p * 3)));
-      ctx.stroke();
-      if (ox) ctx.restore();
+      for (const [a, b] of e.bridges) {
+        if (p <= 0) continue;
+        ctx.beginPath(); edgePath(e, a, Math.min(b, e.len * p), e.S.co, 0);
+        ctx.strokeStyle = P.deck; ctx.lineWidth = e.S.w + 7; ctx.stroke();
+      }
     }
-  };
-  ctx.lineCap = 'butt';
-  for (const e of list) for (const [a, b] of e.bridges) {
-    const p = edgeProg(e); if (p <= 0) continue;
-    ctx.beginPath(); edgePath(e, a, Math.min(b, e.len * p), 0);
-    ctx.strokeStyle = P.deck; ctx.lineWidth = RT[e.type].w + 7; ctx.stroke();
+    ctx.lineCap = 'round';
+  } else {
+    // shadow on the ground, then pillars, then the deck
+    ctx.strokeStyle = P.hwShadow;
+    for (const [e, a, b, p] of runs) { ctx.beginPath(); edgePath(e, a, b, e.S.co, 2); ctx.lineWidth = e.S.w * grow(p); ctx.stroke(); }
+    for (const [e, a, b] of runs) {
+      for (let s = Math.ceil(a / 26) * 26; s < b; s += 26) {
+        const f = pointAt(e, s);
+        if (f.z < 0.5) continue;
+        const h = lift(f.z);
+        for (const side of [-1, 1]) {
+          const x = f.x + f.nx * (e.S.co + side * e.S.w * 0.28), y = f.y + f.ny * (e.S.co + side * e.S.w * 0.28);
+          ctx.fillStyle = P.deck; ctx.fillRect(x - 0.9, y - h, 1.8, h);
+          ctx.fillStyle = P.hwShadow; ctx.beginPath(); ctx.ellipse(x, y, 1.6, 0.9, 0, 0, 7); ctx.fill();
+        }
+      }
+    }
   }
-  ctx.lineCap = 'round';
-  if (hwLayer) strokeAll(P.hwShadow, e => RT[e.type].w + 2, 3, 4);
-  strokeAll(P.roadEdge, e => RT[e.type].w + 3);
-  strokeAll(P.road, e => RT[e.type].w);
+  for (const [e, a, b, p] of runs) { ctx.beginPath(); edgePath(e, a, b, e.S.co, 0); ctx.strokeStyle = layer > 0 ? P.deck : P.roadEdge; ctx.lineWidth = (e.S.w + 3) * grow(p); ctx.stroke(); }
+  for (const [e, a, b, p] of runs) { ctx.beginPath(); edgePath(e, a, b, e.S.co, 0); ctx.strokeStyle = P.road; ctx.lineWidth = e.S.w * grow(p); ctx.stroke(); }
+  // junction plates and roundabouts at this level
   for (const n of G.nodes.values()) {
-    if (n.edges.length < 3 || !inView(n.x, n.y, 40) || n.allHw !== hwLayer) continue;
+    if (n.edges.length < 3 || zClass(n.z) !== layer || !inView(n.x, n.y, 40)) continue;
+    const y = n.y - lift(n.z);
     if (n.ctl === 'round') {
-      ctx.fillStyle = P.roadEdge; ctx.beginPath(); ctx.arc(n.x, n.y, n.r + 7, 0, 7); ctx.fill();
-      ctx.fillStyle = P.road; ctx.beginPath(); ctx.arc(n.x, n.y, n.r + 5.5, 0, 7); ctx.fill();
-      ctx.fillStyle = P.roadEdge; ctx.beginPath(); ctx.arc(n.x, n.y, n.r - 7.5, 0, 7); ctx.fill();
-      ctx.fillStyle = P.island; ctx.beginPath(); ctx.arc(n.x, n.y, n.r - 8.5, 0, 7); ctx.fill();
-      ctx.fillStyle = P.tree[1]; ctx.beginPath(); ctx.arc(n.x - 2, n.y - 2, 4, 0, 7); ctx.arc(n.x + 3, n.y + 2, 3, 0, 7); ctx.fill();
+      ctx.fillStyle = P.roadEdge; ctx.beginPath(); ctx.arc(n.x, y, n.r + 7, 0, 7); ctx.fill();
+      ctx.fillStyle = P.road; ctx.beginPath(); ctx.arc(n.x, y, n.r + 5.5, 0, 7); ctx.fill();
+      ctx.fillStyle = P.roadEdge; ctx.beginPath(); ctx.arc(n.x, y, n.r - 7.5, 0, 7); ctx.fill();
+      ctx.fillStyle = P.island; ctx.beginPath(); ctx.arc(n.x, y, n.r - 8.5, 0, 7); ctx.fill();
+      ctx.fillStyle = P.tree[1]; ctx.beginPath(); ctx.arc(n.x - 2, y - 2, 4, 0, 7); ctx.arc(n.x + 3, y + 2, 3, 0, 7); ctx.fill();
     } else {
-      ctx.fillStyle = P.road; ctx.beginPath(); ctx.arc(n.x, n.y, n.r + 0.5, 0, 7); ctx.fill();
+      ctx.fillStyle = P.road; ctx.beginPath(); ctx.arc(n.x, y, n.r + 0.5, 0, 7); ctx.fill();
     }
   }
+  // turning circles at dead ends
   for (const n of G.nodes.values()) {
-    if (n.edges.length !== 1 || n.id === G.outside || !inView(n.x, n.y, 20)) continue;
+    if (n.edges.length !== 1 || n.id === G.outside || zClass(n.z) !== layer || !inView(n.x, n.y, 20)) continue;
     const e = G.edges.get(n.edges[0]);
-    if (e.type === 'highway' || edgeProg(e) < 1) continue;
-    const r = RT[e.type].w * 0.85;
-    ctx.fillStyle = P.roadEdge; ctx.beginPath(); ctx.arc(n.x, n.y, r + 1.5, 0, 7); ctx.fill();
-    ctx.fillStyle = P.road; ctx.beginPath(); ctx.arc(n.x, n.y, r, 0, 7); ctx.fill();
+    if (e.S.freeway || edgeProg(e) < 1) continue;
+    const r = e.S.w * 0.85, y = n.y - lift(n.z);
+    ctx.fillStyle = P.roadEdge; ctx.beginPath(); ctx.arc(n.x, y, r + 1.5, 0, 7); ctx.fill();
+    ctx.fillStyle = P.road; ctx.beginPath(); ctx.arc(n.x, y, r, 0, 7); ctx.fill();
   }
   if (cam.z < 0.55) return;
+  // lane markings, generated from each road's design
   ctx.lineCap = 'butt';
-  for (const e of list) {
-    if (edgeProg(e) < 1) continue;
-    const T = RT[e.type], s0 = trimOf(e.a) + 1, s1 = e.len - trimOf(e.b) - 1;
-    if (s1 - s0 < 4) continue;
-    const line = (off, color, w, dash) => { ctx.beginPath(); edgePath(e, s0, s1, off); ctx.strokeStyle = color; ctx.lineWidth = w; ctx.setLineDash(dash || []); ctx.stroke(); };
-    if (e.type === 'lane') continue;
-    if (e.type === 'street') line(0, P.mark, 0.5, [3, 3]);
-    else if (e.type === 'oneway') {
-      line(0, P.mark, 0.5, [3, 3]);
+  for (const [e, a, b, p] of runs) {
+    if (p < 1) continue;
+    const S = e.S, s0 = Math.max(a, trimOf(e.a) + 1), s1 = Math.min(b, e.len - trimOf(e.b) - 1);
+    if (s1 - s0 < 4 || S.auto) continue;
+    const line = (off, color, w, dash) => { ctx.beginPath(); edgePath(e, s0, s1, off, 0); ctx.strokeStyle = color; ctx.lineWidth = w; ctx.setLineDash(dash || []); ctx.stroke(); };
+    if (S.oneway) {
+      for (let k = 1; k < S.f; k++) line((k - S.f / 2) * S.lw, P.mark, 0.5, [3, 3]);
       ctx.setLineDash([]);
       ctx.fillStyle = P.mark;
       for (let s = s0 + 12; s < s1 - 6; s += 32) {
-        for (const off of [-2.5, 2.5]) {
-          const f = pointAt(e, s), x = f.x + f.nx * off, y = f.y + f.ny * off;
+        const f = pointAt(e, s), ly = lift(f.z);
+        for (let k = 0; k < S.f; k++) {
+          const off = laneOff(S, k), x = f.x + f.nx * off, y = f.y + f.ny * off - ly;
           ctx.beginPath();
           ctx.moveTo(x + f.tx * 2.4, y + f.ty * 2.4);
           ctx.lineTo(x - f.tx * 1.4 + f.nx * 1.3, y - f.ty * 1.4 + f.ny * 1.3);
@@ -2035,34 +2228,42 @@ function drawRoads(hwLayer) {
         }
       }
     } else {
-      line(-0.55, P.yellow, 0.45); line(0.55, P.yellow, 0.45);
-      const lw = T.w / 4;
-      line(lw, P.mark, 0.45, [3, 4]); line(-lw, P.mark, 0.45, [3, 4]);
-      if (e.type === 'highway') { line(T.w / 2 - 0.9, P.mark, 0.4); line(-T.w / 2 + 0.9, P.mark, 0.4); }
+      if (S.med === 'none') { if (S.lanes === 2) line(0, P.mark, 0.5, [3, 3]); else { line(-0.4, P.yellow, 0.4); line(0.4, P.yellow, 0.4); } }
+      else if (S.med === 'paint') { line(-S.medW / 2, P.yellow, 0.4); line(S.medW / 2, P.yellow, 0.4); line(0, P.yellow, 0.25, [1, 1.5]); }
+      else if (S.med === 'grass') { line(0, P.roadEdge, S.medW, null); line(0, P.island, S.medW - 1.2, null); }
+      else { line(0, P.roadEdge, S.medW, null); line(0, sh(DAY.flat[1], P.night ? -0.6 : -0.1), 0.5, null); }
+      for (let k = 1; k < S.f; k++) line(S.medW / 2 + k * S.lw, P.mark, 0.45, [3, 4]);
+      for (let k = 1; k < S.b; k++) line(-(S.medW / 2 + k * S.lw), P.mark, 0.45, [3, 4]);
     }
+    if (S.freeway) { line(S.co + S.w / 2 - 1.1, P.mark, 0.4); line(S.co - S.w / 2 + 1.1, P.mark, 0.4); }
   }
   ctx.setLineDash([]);
-  if (hwLayer) return;
-  // stop lines and signals at junctions
+  // boulevard trees in grass medians
+  for (const [e, a, b, p] of runs) {
+    if (p < 1 || e.S.med !== 'grass' || e.S.oneway) continue;
+    for (let s = Math.max(a, trimOf(e.a) + 8); s < Math.min(b, e.len - trimOf(e.b) - 8); s += 14) {
+      const f = pointAt(e, s);
+      treeBody(f.x, f.y - lift(f.z), 2.4, P.tree[(s | 0) % 4], 1);
+    }
+  }
+  if (layer !== 0) return;
+  // stop lines and signals at ground junctions
   for (const n of G.nodes.values()) {
-    if (n.edges.length < 3 || n.ctl === 'round' || n.allHw || !inView(n.x, n.y, 30)) continue;
+    if (n.edges.length < 3 || n.ctl === 'round' || n.freeway || zClass(n.z) !== 0 || !inView(n.x, n.y, 30)) continue;
     for (const id of n.edges) {
       const e = G.edges.get(id);
-      if (!e || e.type === 'highway') continue;
-      const d = e.b === n.id ? 0 : 1;
-      const T = RT[e.type];
-      if (d === 1 && T.oneway) continue;
+      if (!e) continue;
+      const d = e.b === n.id ? 0 : 1, S = e.S;
+      if (!e.lanes[d].length) continue;
       const base = posOnEdge(e, d, e.len - n.r, 0);
-      const nx = -base.dy, ny = base.dx, lo = laneOff(e.type, 0);
-      const cx = base.x - nx * lo, cy = base.y - ny * lo, w = T.w / 2;
+      const nx = -base.dy, ny = base.dx, lo = laneOff(S, 0);
+      const cx = base.x - nx * lo, cy = base.y - ny * lo;
+      const inner = S.oneway ? -S.f * S.lw / 2 : S.medW / 2, outer = S.oneway ? S.f * S.lw / 2 : S.medW / 2 + e.lanes[d].length * S.lw;
       ctx.strokeStyle = P.mark; ctx.lineWidth = 0.8;
-      ctx.beginPath();
-      if (T.oneway) { ctx.moveTo(cx - nx * w, cy - ny * w); ctx.lineTo(cx + nx * w, cy + ny * w); }
-      else { ctx.moveTo(cx, cy); ctx.lineTo(cx + nx * w, cy + ny * w); }
-      ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(cx + nx * inner, cy + ny * inner); ctx.lineTo(cx + nx * outer, cy + ny * outer); ctx.stroke();
       if (n.ctl === 'lights') {
         const mine = n.groups.get(id) === n.phase, green = mine && n.phaseT <= 6.6, amber = mine && n.phaseT > 6.6;
-        const lx = cx + nx * (w + 1.8), ly = cy + ny * (w + 1.8);
+        const lx = cx + nx * (outer + 1.8), ly = cy + ny * (outer + 1.8);
         ctx.fillStyle = '#2b2f37'; ctx.beginPath(); ctx.arc(lx, ly, 1.6, 0, 7); ctx.fill();
         ctx.fillStyle = green ? '#3fd16b' : amber ? '#f2b33c' : '#ef4f45';
         ctx.beginPath(); ctx.arc(lx, ly, 1.05, 0, 7); ctx.fill();
@@ -2071,18 +2272,14 @@ function drawRoads(hwLayer) {
   }
 }
 
-function drawCars(hwLayer) {
+function drawCars(layer) {
   for (const c of G.cars) {
     if (c.dead) continue;
-    let e;
-    if (c.st === 'e') e = G.edges.get(c.legs[c.li].e);
-    else { const nl = c.legs[c.li + 1]; e = nl && G.edges.get(nl.e); }
-    if (!!(e && e.type === 'highway') !== hwLayer) continue;
     const p = carPose(c);
-    if (!p || !inView(p.x, p.y, 10)) continue;
+    if (!p || zClass(p.z || 0) !== layer || !inView(p.x, p.y, 10)) continue;
     const L = c.truck ? TRUCK_LEN : CAR_LEN, Wd = c.truck ? 2.9 : 2.5;
     ctx.save();
-    ctx.translate(p.x, p.y);
+    ctx.translate(p.x, p.y - lift(p.z || 0));
     ctx.rotate(Math.atan2(p.dy, p.dx));
     if (P.night) {
       const g = ctx.createRadialGradient(L * 0.7, 0, 0, L * 0.7, 0, 9);
@@ -2333,13 +2530,13 @@ function drawWater() {
   }
 }
 
-function drawZoneAnim() {
+function drawZoneAnim(zonesOn) {
   const done = [];
   for (let k = animCells.length - 1; k >= 0; k--) {
     const c = animCells[k], t = (clock - G.zoneT[c]) / 0.35;
     const z = G.zone[c];
     if (t >= 1 || !z) { done.push(c); animCells.splice(k, 1); continue; }
-    if (t <= 0) continue;
+    if (t <= 0 || (z !== ZP && !zonesOn)) continue;
     const x = (c % CW) * CELL + 5, y = ((c / CW) | 0) * CELL + 5, s = easeBack(t);
     ctx.globalAlpha = z === ZP ? 1 : 0.55;
     ctx.fillStyle = z === ZP ? P.grass : P.zone[z];
@@ -2437,12 +2634,14 @@ function draw() {
   ctx.imageSmoothingEnabled = true;
   ctx.drawImage(groundLayer, 0, 0, WW, WH);
   drawWater();
-  ctx.globalAlpha = 0.55; ctx.drawImage(zoneLayer, 0, 0, WW, WH); ctx.globalAlpha = 1;
+  const zonesOn = showZones();
+  if (zonesOn) { ctx.globalAlpha = 0.55; ctx.drawImage(zoneLayer, 0, 0, WW, WH); ctx.globalAlpha = 1; }
   ctx.drawImage(parkLayer, 0, 0, WW, WH);
-  drawZoneAnim();
+  drawZoneAnim(zonesOn);
   drawParksFlat();
   if (viewMode === 'value' && lvGrid) { ctx.globalAlpha = 0.5; ctx.drawImage(overlayLayer, 0, 0, WW, WH); ctx.globalAlpha = 1; }
-  drawRoads(false);
+  drawRoads(-1);
+  drawRoads(0);
   const lots = visibleLots();
   drawLotsGround(lots);
   const trees = [];
@@ -2454,12 +2653,12 @@ function draw() {
     if (t > 0) parkTrees.push([d, easeBack(t)]);
   }
   addShadows(lots, trees, parkTrees);
-  drawCars(false);
+  drawCars(0);
   drawLotBodies(lots);
-  drawRoads(true);
-  drawCars(true);
   for (const t of trees) treeBody(t.x, t.y, t.r, P.tree[t.c], 1);
   for (const [d, s] of parkTrees) treeBody(d.x, d.y, d.r, treeColor(d.c, d.bl), s);
+  drawRoads(1); drawCars(1);
+  drawRoads(2); drawCars(2);
   if (viewMode === 'traffic') drawTrafficOverlay();
   drawParticles();
   drawBadges(lots);
@@ -2472,17 +2671,20 @@ function drawTrafficOverlay() {
   ctx.lineCap = 'round';
   for (const e of G.edges.values()) {
     if (!edgeVisible(e)) continue;
-    const T = RT[e.type], cap = Math.max(1, e.len / 9 * T.lanes);
-    for (let d = 0; d < (T.oneway ? 1 : 2); d++) {
+    const T = e.S;
+    for (let d = 0; d < 2; d++) {
+      const L = e.lanes[d].length;
+      if (!L) continue;
+      const cap = Math.max(1, e.len / 9 * L);
       let n = 0, slow = 0;
       for (const q of e.lanes[d]) for (const c of q) { n++; if (c.v < T.speed * 0.3) slow++; }
       const v = clamp(n / cap * 0.8 + (n ? slow / n : 0) * 0.6, 0, 1);
       const [r, g, bb] = heat(v);
       ctx.strokeStyle = `rgba(${r | 0},${g | 0},${bb | 0},0.9)`;
-      ctx.lineWidth = T.oneway ? T.w * 0.5 : T.w * 0.32;
+      ctx.lineWidth = L * T.lw * 0.7;
       ctx.beginPath();
-      const off = T.oneway ? 0 : T.w / 4;
-      edgePath(e, 0, e.len, d === 0 ? off : -off);
+      const off = T.oneway ? 0 : T.medW / 2 + L * T.lw / 2;
+      edgePath(e, 0, e.len, d === 0 ? off : -off, 0);
       ctx.stroke();
     }
   }
@@ -2490,7 +2692,7 @@ function drawTrafficOverlay() {
     if (n.queue.length < 4 || !inView(n.x, n.y, 30)) continue;
     const pulse = 0.5 + 0.5 * Math.sin(clock * 6);
     ctx.strokeStyle = `rgba(239,79,69,${0.5 + pulse * 0.4})`; ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.arc(n.x, n.y, n.r + 9 + pulse * 3, 0, 7); ctx.stroke();
+    ctx.beginPath(); ctx.arc(n.x, n.y - lift(n.z), n.r + 9 + pulse * 3, 0, 7); ctx.stroke();
   }
 }
 function drawParticles() {
@@ -2536,20 +2738,31 @@ function drawBadges(lots) {
 // =====================================================================
 // tools & input
 // =====================================================================
-let tool = 'road', roadType = 'street', roadShape = 'straight', brushIdx = 1, brushFill = false, dozeIdx = 1, viewMode = 'none';
+let tool = 'road', roadShape = 'straight', roadMode = 'build', elevLevel = 0, brushIdx = 1, brushFill = false, dozeIdx = 1, viewMode = 'none', zoneType = 'res';
+let design = { ...PRESETS.street };
 let hoverW = null, hoverScreen = null, rs = null, stroke = null, panDrag = null, pinch = null, spaceDown = false, spacePanned = false, shiftDown = false, selected = null;
 let previewLabel = null;
 const pointers = new Map();
-const isPaint = () => tool === 'res' || tool === 'com' || tool === 'ind' || tool === 'park';
-const toolZone = () => ({ res: ZR, com: ZC, ind: ZI, park: ZP })[tool];
+const isPaint = () => tool === 'zone';
+const toolZone = () => ({ res: ZR, com: ZC, ind: ZI, park: ZP, none: 0 })[zoneType];
+const showZones = () => tool === 'zone' || viewMode === 'zones';
 
+// find the road under the cursor, allowing for bridges being drawn lifted
+function pickRoad(x, y, R) {
+  let best = null;
+  for (const lvl of [0, 1, 2]) {
+    const h = nearestRoad(x, y + lvl * LIFT, R, (e, i) => zClass(e.pts[i].z) === lvl || (lvl === 0 && zClass(e.pts[i].z) === -1));
+    if (h && (!best || h.d < best.d)) best = h;
+  }
+  return best;
+}
 function snapAt(x, y) {
   const R = Math.max(8, 16 / cam.z);
   let bn = null, bd = R;
-  for (const n of G.nodes.values()) { const d = dist(n.x, n.y, x, y); if (d < bd) { bd = d; bn = n; } }
-  if (bn) return { x: bn.x, y: bn.y, node: bn.id };
-  const h = nearestRoad(x, y, Math.max(6, 10 / cam.z));
-  if (h) return { x: h.x, y: h.y, edge: h.e.id };
+  for (const n of G.nodes.values()) { const d = dist(n.x, n.y - lift(n.z), x, y); if (d < bd) { bd = d; bn = n; } }
+  if (bn) return { x: bn.x, y: bn.y, z: bn.z, node: bn.id };
+  const h = pickRoad(x, y, Math.max(6, 10 / cam.z));
+  if (h) return { x: h.x, y: h.y, z: h.z, edge: h.e.id };
   return { x, y };
 }
 function angleSnap(a, b) {
@@ -2565,11 +2778,20 @@ function quadPts(a, c, b) {
 }
 function roadPreviewPts() {
   if (!rs) return null;
-  if (rs.stage === 'drag') return rs.b ? [rs.a, rs.b] : null;
-  if (rs.stage === 'leg' || rs.stage === 'leg2') return rs.c ? [rs.a, rs.c] : null;
-  if (rs.stage === 'end') return quadPts(rs.a, rs.c, rs.b || rs.c);
-  if (rs.stage === 'free') return smoothFree(rs.pts);
-  return null;
+  let pts = null, b = rs.b;
+  if (rs.stage === 'drag') pts = rs.b ? [rs.a, rs.b] : null;
+  else if (rs.stage === 'leg' || rs.stage === 'leg2') { pts = rs.c ? [rs.a, rs.c] : null; b = rs.c; }
+  else if (rs.stage === 'end') { b = rs.b || rs.c; pts = quadPts(rs.a, rs.c, b); }
+  else if (rs.stage === 'free') { pts = smoothFree(rs.pts); b = rs.pts[rs.pts.length - 1]; }
+  if (!pts || pts.length < 2 || polyLen(pts) < 1) return null;
+  return profiled(pts, rs.a, b && (b.node || b.edge) ? b : null);
+}
+// fit the chosen elevation between the levels of whatever the road starts and ends on
+function profiled(pts, a, b) {
+  const out = resample(pts.map(p => ({ x: p.x, y: p.y })), 5);
+  // loose ends come down to the ground, so every bridge or tunnel has somewhere to land
+  const z0 = a && (a.node || a.edge) ? a.z || 0 : 0, z1 = b && (b.node || b.edge) ? b.z || 0 : 0;
+  return applyProfile(out, z0, elevLevel, z1);
 }
 function smoothFree(pts) {
   if (pts.length < 2) return pts;
@@ -2580,11 +2802,11 @@ function smoothFree(pts) {
 }
 function commitRoad(pts, a, b) {
   if (!pts || pts.length < 2) return;
-  if (!isUnlocked(roadType)) { toast(`${RT[roadType].name}s unlock at ${fmt(RT[roadType].unlock)} residents.`, 'bad'); return; }
-  pts = pts.slice();
+  pts = pts.map(p => ({ x: p.x, y: p.y }));
   pts[0] = { x: a.x, y: a.y };
   pts[pts.length - 1] = { x: b.x, y: b.y };
-  buildRoad(pts, roadType, a.node ? a : null, b.node ? b : null, false);
+  pts = profiled(pts, a, b);
+  buildRoad(pts, design, a.node ? a : null, b.node ? b : null, false);
 }
 function nearestJunction(x, y) {
   let best = null, bd = Math.max(16, 22 / cam.z);
@@ -2598,13 +2820,13 @@ function nearestJunction(x, y) {
 const JORDER = ['yield', 'lights', 'round'];
 function nextJunction(n) {
   let next = JORDER[(JORDER.indexOf(n.ctl) + 1) % 3];
-  if (next === 'round' && n.allHw) next = 'yield';
+  if (next === 'round' && n.freeway) next = 'yield';
   return next;
 }
 function cycleJunction(n) {
   let next = nextJunction(n);
   if (next !== 'yield' && !isUnlocked(next)) {
-    const alt = next === 'lights' && isUnlocked('round') && !n.allHw ? 'round' : null;
+    const alt = next === 'lights' && isUnlocked('round') && !n.freeway ? 'round' : null;
     if (!alt) { toast(`${JUNC[next].name} unlock at ${fmt(JUNC[next].unlock)} residents.`, 'bad'); return; }
     next = alt;
   }
@@ -2631,7 +2853,7 @@ function bulldozeAt(x, y, r) {
   const rm = [];
   for (const e of G.edges.values()) {
     if (e.bb[0] > x + r || e.bb[2] < x - r || e.bb[1] > y + r || e.bb[3] < y - r) continue;
-    if (e.pts.some(p => dist(p.x, p.y, x, y) < r * 0.6 + RT[e.type].w / 2)) rm.push(e);
+    if (e.pts.some(p => dist(p.x, p.y - lift(p.z), x, y) < r * 0.6 + e.S.w / 2)) rm.push(e);
   }
   if (rm.length) { rm.forEach(e => { const m = pointAt(e, e.len / 2); puff(m.x, m.y, 'dust', 4); }); removeEdges(rm); }
   rebuildTreeGrid();
@@ -2659,7 +2881,10 @@ cv.addEventListener('pointerdown', e => {
     return;
   }
   if (e.button !== 0) return;
-  if (tool === 'road') {
+  if (tool === 'road' && roadMode === 'upgrade') {
+    const h = pickRoad(w.x, w.y, Math.max(8, 14 / cam.z));
+    if (h) upgradeEdge(h.e, design); else toast('Click a road to rebuild it with this design.');
+  } else if (tool === 'road') {
     if (roadShape === 'straight') rs = { stage: 'drag', a: snapAt(w.x, w.y) };
     else if (roadShape === 'free') rs = { stage: 'free', a: snapAt(w.x, w.y), pts: [w] };
     else if (!rs) rs = { stage: 'leg', a: snapAt(w.x, w.y) };
@@ -2750,7 +2975,7 @@ function endPointer(e) {
   }
 }
 function paintFx(x, y, size) {
-  if (tool !== 'park') return;
+  if (zoneType !== 'park') return;
   particles.push({ x, y, life: 0, max: 0.9, kind: 'ring', size: size || BRUSH[brushIdx] * 1.3 });
   for (let k = 0; k < 6; k++) particles.push({ x: x + (Math.random() - 0.5) * 20, y: y + (Math.random() - 0.5) * 20, vx: (Math.random() - 0.5) * 8, vy: -8 - Math.random() * 8, life: -Math.random() * 0.3, max: 1, kind: 'spark', size: 0.9, c: (Math.random() * 5) | 0 });
 }
@@ -2774,7 +2999,7 @@ window.addEventListener('keydown', e => {
   shiftDown = e.shiftKey;
   if (e.code === 'Space') { e.preventDefault(); if (!e.repeat) { spaceDown = true; spacePanned = false; cv.classList.add('pan'); } return; }
   if (state !== 'play') return;
-  const tk = { 1: 'inspect', 2: 'road', 3: 'junction', 4: 'res', 5: 'com', 6: 'ind', 7: 'park', 8: 'doze' }[k];
+  const tk = { 1: 'inspect', 2: 'road', 3: 'junction', 4: 'zone', 5: 'doze' }[k];
   if (tk) setTool(tk);
   if (tool === 'road') { if (k === 'z') setShape('straight'); if (k === 'x') setShape('curve'); if (k === 'c') setShape('free'); }
   if (k === 'escape') { rs = null; stroke = null; selected = null; $('tip').hidden = true; }
@@ -2798,23 +3023,36 @@ function drawPreview() {
   if (!hoverW || state !== 'play') return;
   const w = hoverW;
   const ink = P.night ? '#f2bd45' : '#1e242b';
+  if (tool === 'road' && roadMode === 'upgrade') {
+    const h = pickRoad(w.x, w.y, Math.max(8, 14 / cam.z));
+    if (h) {
+      const e = h.e, S = specOf(design), same = S.key === e.S.key;
+      ctx.lineCap = 'round'; ctx.strokeStyle = 'rgba(240,180,41,0.55)'; ctx.lineWidth = Math.max(e.S.w, S.w) + 4;
+      ctx.beginPath(); edgePath(e, 0, e.len, e.S.co, 0); ctx.stroke();
+      const cost = same ? 50 : Math.max(50, roadCost(e.pts, design) - Math.round(roadCost(e.pts, e.spec) * 0.5));
+      previewLabel = same ? (e.S.oneway ? { text: `Reverse one-way · $50`, bad: G.money < 50 } : { text: 'Already this design', bad: true })
+        : { text: `${e.S.name} → ${S.name} · $${fmt(cost)}`, bad: cost > G.money };
+    }
+    return;
+  }
   if (tool === 'road') {
     const pts = roadPreviewPts();
-    const T = RT[roadType];
-    if (pts && pts.length >= 2 && polyLen(pts) > 1) {
-      const sm = resample(pts, 5), cost = roadCost(sm, roadType), bad = cost > G.money || !isUnlocked(roadType);
+    const T = specOf(design);
+    if (pts) {
+      const cost = roadCost(pts, design), bad = cost > G.money;
       ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-      ctx.strokeStyle = bad ? 'rgba(200,68,58,0.55)' : (P.night ? 'rgba(242,189,69,0.45)' : 'rgba(30,36,43,0.35)');
-      ctx.lineWidth = T.w;
-      ctx.beginPath(); ctx.moveTo(sm[0].x, sm[0].y); for (const p of sm) ctx.lineTo(p.x, p.y); ctx.stroke();
-      ctx.strokeStyle = 'rgba(255,255,255,0.85)'; ctx.lineWidth = 0.6; ctx.setLineDash([3, 3]);
-      ctx.beginPath(); ctx.moveTo(sm[0].x, sm[0].y); for (const p of sm) ctx.lineTo(p.x, p.y); ctx.stroke(); ctx.setLineDash([]);
-      if (T.oneway && sm.length > 2) {
-        const m = sm[Math.floor(sm.length / 2)], n = sm[Math.floor(sm.length / 2) + 1] || m;
-        const a = Math.atan2(n.y - m.y, n.x - m.x);
+      const line = mode => { ctx.beginPath(); pts.forEach((p, i) => { const h = Math.max(0, p.z) * LIFT; const x = p.x + (mode === 2 ? h * 0.9 : 0), y = p.y + (mode === 2 ? h * 1.2 : -h); if (i) ctx.lineTo(x, y); else ctx.moveTo(x, y); }); };
+      if (elevLevel > 0 || pts.some(p => p.z > 0.3)) { line(2); ctx.strokeStyle = P.hwShadow; ctx.lineWidth = T.w; ctx.stroke(); }
+      line(0);
+      ctx.strokeStyle = bad ? 'rgba(200,68,58,0.55)' : (P.night ? 'rgba(242,189,69,0.45)' : 'rgba(30,36,43,0.38)');
+      ctx.lineWidth = T.w; ctx.stroke();
+      ctx.strokeStyle = 'rgba(255,255,255,0.85)'; ctx.lineWidth = 0.6; ctx.setLineDash(pts.some(p => p.z < -0.3) ? [1, 3] : [3, 3]); ctx.stroke(); ctx.setLineDash([]);
+      if (T.oneway && pts.length > 2) {
+        const m = pts[Math.floor(pts.length / 2)], n = pts[Math.floor(pts.length / 2) + 1] || m;
+        const a = Math.atan2(n.y - m.y, n.x - m.x), my = m.y - Math.max(0, m.z) * LIFT;
         ctx.fillStyle = '#fff'; ctx.beginPath();
-        ctx.moveTo(m.x + Math.cos(a) * 4, m.y + Math.sin(a) * 4);
-        ctx.lineTo(m.x + Math.cos(a + 2.4) * 3, m.y + Math.sin(a + 2.4) * 3); ctx.lineTo(m.x + Math.cos(a - 2.4) * 3, m.y + Math.sin(a - 2.4) * 3); ctx.fill();
+        ctx.moveTo(m.x + Math.cos(a) * 4, my + Math.sin(a) * 4);
+        ctx.lineTo(m.x + Math.cos(a + 2.4) * 3, my + Math.sin(a + 2.4) * 3); ctx.lineTo(m.x + Math.cos(a - 2.4) * 3, my + Math.sin(a - 2.4) * 3); ctx.fill();
       }
       if (rs && rs.stage === 'end') {
         const b = rs.b || rs.c;
@@ -2822,15 +3060,16 @@ function drawPreview() {
         ctx.beginPath(); ctx.moveTo(rs.a.x, rs.a.y); ctx.lineTo(rs.c.x, rs.c.y); ctx.lineTo(b.x, b.y); ctx.stroke();
         ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(rs.c.x, rs.c.y, 2, 0, 7); ctx.fill();
       }
-      previewLabel = { text: `${T.name} · $${fmt(cost)}`, bad };
+      const lvl = elevLevel < 0 ? ' · tunnel' : elevLevel === 1 ? ' · bridge' : elevLevel === 2 ? ' · high bridge' : '';
+      previewLabel = { text: `${T.name}${lvl} · $${fmt(cost)}`, bad };
     } else if (rs && rs.stage === 'leg2') previewLabel = { text: 'Click to set the bend', bad: false };
     const sn = rs ? (rs.stage === 'end' || rs.stage === 'drag' ? rs.b : null) : snapAt(w.x, w.y);
     for (const s of [rs && rs.a, sn]) {
       if (!s || (!s.node && !s.edge)) continue;
       ctx.strokeStyle = ink; ctx.lineWidth = 1.2;
-      ctx.beginPath(); ctx.arc(s.x, s.y, T.w / 2 + 2, 0, 7); ctx.stroke();
+      ctx.beginPath(); ctx.arc(s.x, s.y - lift(s.z || 0), T.w / 2 + 2, 0, 7); ctx.stroke();
     }
-    if (!rs) { ctx.fillStyle = ink; ctx.beginPath(); ctx.arc(sn ? sn.x : w.x, sn ? sn.y : w.y, 1.6, 0, 7); ctx.fill(); }
+    if (!rs) { ctx.fillStyle = ink; ctx.beginPath(); ctx.arc(sn ? sn.x : w.x, sn ? sn.y - lift(sn.z || 0) : w.y, 1.6, 0, 7); ctx.fill(); }
   } else if (isPaint() || tool === 'doze') {
     const z = toolZone();
     const col = tool === 'doze' ? '#ef4f45' : z === ZP ? '#2f8f50' : P.zoneEdge[z];
@@ -2852,8 +3091,8 @@ function drawPreview() {
         ctx.strokeStyle = 'rgba(239,79,69,0.7)'; ctx.lineCap = 'round';
         for (const e of G.edges.values()) {
           if (e.bb[0] > w.x + r || e.bb[2] < w.x - r || e.bb[1] > w.y + r || e.bb[3] < w.y - r) continue;
-          if (!e.pts.some(p => dist(p.x, p.y, w.x, w.y) < r * 0.6 + RT[e.type].w / 2)) continue;
-          ctx.lineWidth = RT[e.type].w; ctx.beginPath(); edgePath(e, 0, e.len, 0); ctx.stroke();
+          if (!e.pts.some(p => dist(p.x, p.y - lift(p.z), w.x, w.y) < r * 0.6 + e.S.w / 2)) continue;
+          ctx.lineWidth = e.S.w; ctx.beginPath(); edgePath(e, 0, e.len, e.S.co, 0); ctx.stroke();
         }
       }
     }
@@ -2902,18 +3141,21 @@ function describeAt(x, y) {
     }
     rows.push(['Land value', Math.round(lvAt(lot.x, lot.y))]);
   } else {
-    const h = nearestRoad(x, y, 12);
+    const h = pickRoad(x, y, 12);
     const n = nearestJunction(x, y);
     if (n && dist(n.x, n.y, x, y) < n.r + 6) {
       title = JUNC[n.ctl].name;
       rows.push(['Roads meeting', n.edges.length], ['Cars waiting', n.queue.length, n.queue.length > 5]);
       notes.push('Use the Junctions tool to change it.');
-    } else if (h && h.d < RT[h.e.type].w / 2 + 2) {
-      const e = h.e, T = RT[e.type];
-      title = e.bridges.length ? T.name + ' bridge' : T.name;
+    } else if (h && h.d < h.e.S.w / 2 + Math.abs(h.e.S.co) + 2) {
+      const e = h.e, T = e.S, zc = zClass(h.z);
+      title = T.name + (zc < 0 ? ' tunnel' : zc > 0 ? (zc > 1 ? ' high bridge' : ' bridge') : e.bridges.length ? ' bridge' : '');
       let cnt = 0, slow = 0;
       for (const dl of e.lanes) for (const q of dl) for (const c of q) { cnt++; if (c.v < T.speed * 0.3) slow++; }
-      rows.push(['Lanes', T.oneway ? `${T.lanes} one way` : `${T.lanes} each way`], ['Cars', cnt], ['Stopped', slow, slow > 4]);
+      rows.push(['Lanes', T.oneway ? `${T.f} one way` : `${T.f} + ${T.b}`], ['Speed limit', `${T.kmh} km/h`], ['Median', MEDIANS[T.med].name]);
+      rows.push(['Cars', cnt], ['Stopped', slow, slow > 4]);
+      if (T.noFront) notes.push('No driveways: buildings cannot front onto it.');
+      notes.push('Use Roads → Upgrade to rebuild it with another design.');
       if (e.a === G.outside || e.b === G.outside) notes.push('Connects to the region. Commuters and trucks come and go here.');
     } else {
       const z = zoneAt(x, y);
@@ -2955,17 +3197,59 @@ function setSpeed(v) {
 function setTool(t) {
   tool = t; rs = null; stroke = null; selected = null;
   for (const b of document.querySelectorAll('.tool')) b.classList.toggle('on', b.dataset.tool === t);
-  $('roadOpts').hidden = t !== 'road';
-  $('paintOpts').hidden = !isPaint();
+  $('roadOpts').hidden = $('roadDesign').hidden = $('roadShapeSeg').hidden = t !== 'road';
+  $('zoneOpts').hidden = !isPaint();
   $('dozeOpts').hidden = t !== 'doze';
   $('juncOpts').hidden = t !== 'junction';
   cv.classList.toggle('pan', t === 'inspect');
   $('tip').hidden = true;
 }
-function setRoadType(t) {
-  roadType = t;
-  for (const b of document.querySelectorAll('[data-rt]')) b.classList.toggle('on', b.dataset.rt === t);
+// ---------- road designer ----------
+function syncDesign() {
+  const S = specOf(design);
+  for (const b of document.querySelectorAll('[data-preset]')) {
+    const q = PRESETS[b.dataset.preset];
+    b.classList.toggle('on', specOf(q).key === S.key);
+  }
+  $('dF').textContent = design.f; $('dB').textContent = design.b;
+  $('dMed').textContent = `Median: ${S.oneway ? 'n/a' : MEDIANS[design.med].name}`;
+  $('dMed').disabled = S.oneway;
+  $('dSpeed').textContent = `${design.kmh} km/h`;
+  $('dFront').textContent = design.front ? 'Driveways: on' : 'Driveways: off';
+  for (const b of document.querySelectorAll('[data-elev]')) b.classList.toggle('on', +b.dataset.elev === elevLevel);
+  for (const b of document.querySelectorAll('[data-rmode]')) b.classList.toggle('on', b.dataset.rmode === roadMode);
+  const lvl = elevLevel < 0 ? 5 : elevLevel > 0 ? 1.6 + elevLevel : 1;
+  $('dSummary').textContent = `${S.name} · ${(S.w * 0.75).toFixed(0)} m wide · $${(S.cost * lvl).toFixed(1)}/m`;
+  drawXsec(S);
 }
+function drawXsec(S) {
+  const c = $('dXsec'), x = c.getContext('2d'), r = window.devicePixelRatio || 1, W = 150, H = 26;
+  if (c.width !== W * r) { c.width = W * r; c.height = H * r; }
+  x.setTransform(r, 0, 0, r, 0, 0);
+  x.clearRect(0, 0, W, H);
+  const scale = Math.min(5.5, (W - 8) / S.w), total = S.w * scale, x0 = (W - total) / 2;
+  const css = getComputedStyle(document.documentElement);
+  x.fillStyle = '#4c515c'; x.fillRect(x0, 3, total, H - 6);
+  let cx = x0 + 0.8 * scale;
+  const lane = up => {
+    x.fillStyle = 'rgba(255,255,255,0.85)';
+    const mx = cx + S.lw * scale / 2, my = H / 2;
+    x.beginPath();
+    if (up) { x.moveTo(mx, my - 6); x.lineTo(mx - 3.5, my); x.lineTo(mx + 3.5, my); }
+    else { x.moveTo(mx, my + 6); x.lineTo(mx - 3.5, my); x.lineTo(mx + 3.5, my); }
+    x.fill();
+    cx += S.lw * scale;
+  };
+  for (let k = 0; k < S.b; k++) lane(false);
+  if (S.medW) {
+    x.fillStyle = S.med === 'grass' ? '#8cc475' : S.med === 'barrier' ? '#b9b8b0' : '#f0b429';
+    x.fillRect(cx, 3, S.medW * scale, H - 6);
+    cx += S.medW * scale;
+  } else if (!S.oneway) { x.fillStyle = '#f0b429'; x.fillRect(cx - 0.5, 3, 1, H - 6); }
+  for (let k = 0; k < S.f; k++) lane(true);
+  x.strokeStyle = css.getPropertyValue('--line') || '#ccc'; x.lineWidth = 1; x.strokeRect(x0 + 0.5, 3.5, total - 1, H - 7);
+}
+function setPreset(k) { design = { ...PRESETS[k] }; syncDesign(); }
 function setShape(s) {
   roadShape = s; rs = null;
   for (const b of document.querySelectorAll('[data-shape]')) b.classList.toggle('on', b.dataset.shape === s);
@@ -2977,21 +3261,26 @@ function setBrush(v) {
 function setDoze(v) { dozeIdx = +v; for (const b of document.querySelectorAll('[data-doze]')) b.classList.toggle('on', b.dataset.doze === String(dozeIdx)); }
 function setView(v) { viewMode = v; for (const b of document.querySelectorAll('[data-view]')) b.classList.toggle('on', b.dataset.view === v); }
 function syncLocks() {
-  for (const b of document.querySelectorAll('[data-rt]')) {
-    const T = RT[b.dataset.rt], ok = isUnlocked(b.dataset.rt);
-    b.classList.toggle('locked', !ok);
-    b.querySelector('small').textContent = ok ? `$${T.cost}/m` : `at ${fmt(T.unlock)} pop`;
-  }
   const parts = ['Click a junction to switch it: yield'];
   parts.push(isUnlocked('lights') ? 'traffic lights ($800)' : `traffic lights (at ${JUNC.lights.unlock} pop)`);
   parts.push(isUnlocked('round') ? 'roundabout ($1,500)' : `roundabout (at ${JUNC.round.unlock} pop)`);
   $('juncHint').textContent = parts.join(', ') + '.';
 }
 for (const b of document.querySelectorAll('.tool')) b.addEventListener('click', () => setTool(b.dataset.tool));
-for (const b of document.querySelectorAll('[data-rt]')) b.addEventListener('click', () => {
-  if (!isUnlocked(b.dataset.rt)) { toast(`${RT[b.dataset.rt].name}s unlock at ${fmt(RT[b.dataset.rt].unlock)} residents.`, 'bad'); return; }
-  setRoadType(b.dataset.rt);
+for (const b of document.querySelectorAll('[data-preset]')) b.addEventListener('click', () => setPreset(b.dataset.preset));
+for (const b of document.querySelectorAll('[data-step]')) b.addEventListener('click', () => {
+  const k = b.dataset.step[0], dlt = b.dataset.step.slice(1) === '+1' ? 1 : -1;
+  design[k] = clamp(design[k] + dlt, k === 'f' ? 1 : 0, 5);
+  syncDesign();
 });
+$('dMore').addEventListener('click', () => { const o = document.body.classList.toggle('design-open'); $('dMore').setAttribute('aria-expanded', o); $('dMore').classList.toggle('on', o); });
+$('dMed').addEventListener('click', () => { design.med = MEDIAN_ORDER[(MEDIAN_ORDER.indexOf(design.med) + 1) % MEDIAN_ORDER.length]; syncDesign(); });
+$('dSpeed').addEventListener('click', () => { design.kmh = SPEEDS[(SPEEDS.indexOf(design.kmh) + 1) % SPEEDS.length]; syncDesign(); });
+$('dFront').addEventListener('click', () => { design.front = !design.front; syncDesign(); });
+for (const b of document.querySelectorAll('[data-elev]')) b.addEventListener('click', () => { elevLevel = +b.dataset.elev; syncDesign(); });
+for (const b of document.querySelectorAll('[data-rmode]')) b.addEventListener('click', () => { roadMode = b.dataset.rmode; rs = null; syncDesign(); });
+function setZoneType(z) { zoneType = z; for (const b of document.querySelectorAll('[data-zone]')) b.classList.toggle('on', b.dataset.zone === z); }
+for (const b of document.querySelectorAll('[data-zone]')) b.addEventListener('click', () => setZoneType(b.dataset.zone));
 for (const b of document.querySelectorAll('[data-shape]')) b.addEventListener('click', () => setShape(b.dataset.shape));
 for (const b of document.querySelectorAll('[data-brush]')) b.addEventListener('click', () => setBrush(b.dataset.brush));
 for (const b of document.querySelectorAll('[data-doze]')) b.addEventListener('click', () => setDoze(b.dataset.doze));
@@ -3070,7 +3359,7 @@ document.addEventListener('visibilitychange', () => { if (document.hidden && G &
 function demoCity() {
   foundCity(20261012);
   const hy = G.hy;
-  const S = pts => buildRoad(pts, 'street', null, null, true);
+  const S = pts => buildRoad(pts, PRESETS.street, null, null, true);
   const arc = (cx, cy, r, a0, a1) => { const p = []; for (let k = 0; k <= 24; k++) { const a = lerp(a0, a1, k / 24); p.push({ x: cx + Math.cos(a) * r, y: cy + Math.sin(a) * r }); } return p; };
   S([{ x: 320, y: hy }, { x: 560, y: hy }]);
   S(arc(440, hy, 120, Math.PI, Math.PI * 2));
@@ -3100,7 +3389,7 @@ resize();
 window.addEventListener('resize', resize);
 demoCity();
 cam.x = 450; cam.y = G.hy; cam.z = clamp(Math.min(innerWidth, innerHeight * 1.5) / 560, 0.8, 2.4);
-setTool('road'); setRoadType('street'); setShape('straight'); setBrush(1); setDoze(1); syncLocks();
+setTool('road'); setShape('straight'); setBrush(1); setDoze(1); setZoneType('res'); syncDesign(); syncLocks();
 
 // =====================================================================
 // main loop
@@ -3132,7 +3421,7 @@ function frame(now) {
 }
 requestAnimationFrame(frame);
 
-window.cityroads = { state: () => G, buildRoad, paintCircle, flushZoneChanges, floodCells, fillCells, cycleJunction, setTool, setView, setSpeed, begin, foundCity, quadPts, nodes: () => [...G.nodes.values()] };
+window.cityroads = { w2s, upgrade: upgradeEdge, state: () => G, buildRoad, paintCircle, flushZoneChanges, floodCells, fillCells, cycleJunction, setTool, setView, setSpeed, begin, foundCity, quadPts, nodes: () => [...G.nodes.values()] };
 if (window.claude && window.claude.hot && window.claude.hot.snapshot) window.claude.hot.snapshot(() => ({ city: G && state === 'play' ? serialize() : null }));
 const hotData = window.claude && window.claude.hot && window.claude.hot.data;
 if (hotData && hotData.city) { try { begin(() => loadCity(hotData.city)); } catch (e) { /* fall back to intro */ } }
