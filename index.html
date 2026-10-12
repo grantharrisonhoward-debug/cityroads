@@ -1,0 +1,784 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>City Roads</title>
+<style>
+  :root {
+    --bg: #e9e4d6;
+    --ink: #2d2b33;
+    --muted: #7a7480;
+    --panel: rgba(255, 255, 255, 0.86);
+    --accent: #e8505b;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink);
+    font-family: "Segoe UI", system-ui, -apple-system, sans-serif; overflow: hidden;
+    user-select: none; -webkit-user-select: none; }
+  #wrap { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+  canvas { display: block; touch-action: none; border-radius: 10px; box-shadow: 0 6px 30px rgba(0,0,0,0.08); }
+  #hud { position: fixed; top: 10px; left: 50%; transform: translateX(-50%); display: flex; gap: 8px;
+    flex-wrap: wrap; justify-content: center; pointer-events: none; max-width: calc(100% - 16px); }
+  .pill { background: var(--panel); border-radius: 999px; padding: 6px 14px; font-weight: 600; font-size: 14px;
+    display: flex; align-items: center; gap: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+  .pill small { color: var(--muted); font-weight: 500; }
+  #weekbar { width: 70px; height: 6px; background: #d8d2c4; border-radius: 3px; overflow: hidden; }
+  #weekfill { height: 100%; width: 0; background: var(--ink); }
+  #tools { position: fixed; bottom: 12px; left: 50%; transform: translateX(-50%); display: flex; gap: 8px; }
+  button { font: inherit; font-weight: 600; border: 0; border-radius: 999px; padding: 8px 16px; cursor: pointer;
+    background: var(--panel); color: var(--ink); box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+  button.on { background: var(--ink); color: #fff; }
+  .overlay { position: fixed; inset: 0; display: none; align-items: center; justify-content: center;
+    background: rgba(233, 228, 214, 0.75); backdrop-filter: blur(3px); padding: 16px; }
+  .overlay.show { display: flex; }
+  .card { background: #fff; border-radius: 16px; padding: 24px; max-width: 520px; width: 100%; text-align: center;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.15); }
+  .card h1, .card h2 { margin: 0 0 8px; }
+  .card p { color: var(--muted); margin: 6px 0 16px; line-height: 1.45; }
+  .choices { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+  .choice { flex: 1 1 140px; border-radius: 12px; padding: 16px 12px; background: #f4f1ea; box-shadow: none;
+    border: 2px solid transparent; text-align: center; }
+  .choice:hover { border-color: var(--ink); }
+  .choice .ico { font-size: 28px; display: block; margin-bottom: 6px; }
+  .choice b { display: block; }
+  .choice span { color: var(--muted); font-weight: 500; font-size: 13px; }
+  .keys { font-size: 13px; color: var(--muted); text-align: left; display: inline-block; margin: 0 0 16px; padding-left: 18px; }
+  .big { background: var(--ink); color: #fff; padding: 10px 26px; font-size: 16px; }
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="c"></canvas></div>
+
+<div id="hud">
+  <div class="pill"><small>Trips</small><span id="score">0</span></div>
+  <div class="pill"><small>Week</small><span id="week">1</span><div id="weekbar"><div id="weekfill"></div></div></div>
+  <div class="pill"><small>Roads</small><span id="roads">0</span></div>
+  <div class="pill"><small>Bridges</small><span id="bridges">0</span></div>
+</div>
+
+<div id="tools">
+  <button id="btnErase" title="Toggle erase mode (E)">Erase</button>
+  <button id="btnPause" title="Pause (Space)">Pause</button>
+  <button id="btnSpeed" title="Speed (F)">1×</button>
+</div>
+
+<div class="overlay show" id="start">
+  <div class="card">
+    <h1>City Roads</h1>
+    <p>Houses send cars to shops of the same color. Draw roads to connect them before the shops get overwhelmed.</p>
+    <ul class="keys">
+      <li><b>Drag</b> to build roads. Building over water uses a bridge.</li>
+      <li><b>Right-drag</b> (or Erase mode) removes roads and refunds them.</li>
+      <li>When a shop's pins overflow, its ring fills up. A full ring ends the game.</li>
+      <li>Each week you get more roads and pick an upgrade.</li>
+    </ul>
+    <br><button class="big" id="btnStart">Start</button>
+  </div>
+</div>
+
+<div class="overlay" id="upgrade">
+  <div class="card">
+    <h2 id="upTitle">Week 2</h2>
+    <p>+10 roads delivered. Choose an upgrade:</p>
+    <div class="choices" id="choices"></div>
+  </div>
+</div>
+
+<div class="overlay" id="over">
+  <div class="card">
+    <h1>Gridlock!</h1>
+    <p id="overText"></p>
+    <button class="big" id="btnRestart">Play again</button>
+  </div>
+</div>
+
+<script>
+(() => {
+'use strict';
+
+const COLS = 30, ROWS = 20;
+const EMPTY = 0, WATER = 1, ROAD = 2, BRIDGE = 3, HOUSE = 4, SHOP = 5;
+const COLORS = ['#e8505b', '#3d8fe0', '#f2a93b', '#2fae7a', '#9767d6'];
+const DARK = ['#b8323c', '#2363a8', '#c47e14', '#1d7b55', '#6c43a6'];
+const WEEK_LEN = 60;
+const MAX_PINS = 12, WARN_PINS = 7, OVERFLOW_TIME = 25;
+const DIRS = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+const $ = id => document.getElementById(id);
+
+let S; // game state
+let tile = 32, dpr = 1;
+
+function newState() {
+  return {
+    tiles: new Uint8Array(COLS * ROWS),
+    owner: new Array(COLS * ROWS).fill(null),
+    houses: [], shops: [], cars: [],
+    roads: 40, bridges: 3,
+    score: 0, time: 0, weekTime: 0, week: 1,
+    carSpeed: 2.4, carsPerHouse: 2,
+    houseTimer: 6, shopTimer: 70, dispatchTimer: 0,
+    colorsUsed: 0,
+    paused: true, over: false, speed: 1,
+  };
+}
+
+const idx = (x, y) => y * COLS + x;
+const inb = (x, y) => x >= 0 && y >= 0 && x < COLS && y < ROWS;
+const T = (x, y) => S.tiles[idx(x, y)];
+const isRoad = t => t === ROAD || t === BRIDGE;
+const rand = (a, b) => a + Math.random() * (b - a);
+const randi = (a, b) => Math.floor(rand(a, b + 1));
+
+// ---------- map generation ----------
+function genRiver() {
+  const vertical = Math.random() < 0.5;
+  const len = vertical ? ROWS : COLS, span = vertical ? COLS : ROWS;
+  let p = randi(Math.floor(span * 0.3), Math.floor(span * 0.7));
+  for (let s = 0; s < len; s++) {
+    const w = Math.random() < 0.35 ? 2 : 1;
+    for (let k = 0; k < w; k++) {
+      const q = p + k;
+      if (q < 0 || q >= span) continue;
+      const x = vertical ? q : s, y = vertical ? s : q;
+      S.tiles[idx(x, y)] = WATER;
+    }
+    if (Math.random() < 0.45) {
+      const np = p + (Math.random() < 0.5 ? -1 : 1);
+      if (np > 2 && np < span - 3) {
+        // keep the river continuous when it shifts sideways
+        const x = vertical ? np : s, y = vertical ? s : np;
+        S.tiles[idx(x, y)] = WATER;
+        p = np;
+      }
+    }
+  }
+  // a few ponds
+  for (let n = 0; n < 2; n++) {
+    const cx = randi(2, COLS - 3), cy = randi(2, ROWS - 3);
+    for (let y = cy - 1; y <= cy + 1; y++) for (let x = cx - 1; x <= cx + 1; x++)
+      if (inb(x, y) && Math.random() < 0.7) S.tiles[idx(x, y)] = WATER;
+  }
+}
+
+function nearShop(x, y, pad) {
+  for (const s of S.shops)
+    if (x >= s.x - pad && x <= s.x + 1 + pad && y >= s.y - pad && y <= s.y + 1 + pad) return true;
+  return false;
+}
+
+function hasFreeSide(x, y) {
+  return DIRS.some(([dx, dy]) => inb(x + dx, y + dy) && T(x + dx, y + dy) === EMPTY);
+}
+
+function placeShop(color) {
+  for (let tries = 0; tries < 400; tries++) {
+    const x = randi(2, COLS - 4), y = randi(2, ROWS - 4);
+    let ok = true;
+    for (let yy = y - 1; yy <= y + 2 && ok; yy++)
+      for (let xx = x - 1; xx <= x + 2 && ok; xx++)
+        if (T(xx, yy) !== EMPTY) ok = false;
+    if (!ok) continue;
+    const minD = tries < 300 ? 6 : 4;
+    if (S.shops.some(s => Math.abs(s.x - x) + Math.abs(s.y - y) < minD * 1.6)) continue;
+    const shop = { x, y, color, pins: 0, assigned: 0, acc: rand(0, 4), overflow: 0, born: S.time };
+    for (let yy = y; yy <= y + 1; yy++) for (let xx = x; xx <= x + 1; xx++) {
+      S.tiles[idx(xx, yy)] = SHOP; S.owner[idx(xx, yy)] = shop;
+    }
+    S.shops.push(shop);
+    return shop;
+  }
+  return null;
+}
+
+function placeHouse(color) {
+  const shops = S.shops.filter(s => s.color === color);
+  const cands = [];
+  for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) {
+    if (T(x, y) !== EMPTY || nearShop(x, y, 1) || !hasFreeSide(x, y)) continue;
+    let best = 99;
+    for (const s of shops) best = Math.min(best, Math.abs(x - s.x - 0.5) + Math.abs(y - s.y - 0.5));
+    if (best < 2.5 || best > 9) continue;
+    // don't wall in neighbours: avoid tiles touching two or more houses
+    let adj = 0;
+    for (const [dx, dy] of DIRS) if (inb(x + dx, y + dy) && T(x + dx, y + dy) === HOUSE) adj++;
+    if (adj > 1) continue;
+    cands.push({ x, y, w: 1 / best });
+  }
+  if (!cands.length) return null;
+  let total = cands.reduce((a, c) => a + c.w, 0), r = Math.random() * total;
+  let pick = cands[0];
+  for (const c of cands) { r -= c.w; if (r <= 0) { pick = c; break; } }
+  const house = { x: pick.x, y: pick.y, color, cars: [], born: S.time };
+  for (let i = 0; i < S.carsPerHouse; i++) house.cars.push(makeCar(house));
+  S.tiles[idx(pick.x, pick.y)] = HOUSE; S.owner[idx(pick.x, pick.y)] = house;
+  S.houses.push(house);
+  return house;
+}
+
+function makeCar(house) {
+  const c = { house, color: house.color, state: 'idle', path: null, i: 0, t: 0, shop: null, wait: 0, stuck: 0 };
+  S.cars.push(c);
+  return c;
+}
+
+function newColorShop() {
+  const color = S.colorsUsed < COLORS.length ? S.colorsUsed++ : randi(0, COLORS.length - 1);
+  const shop = placeShop(color);
+  if (shop) { placeHouse(color); placeHouse(color); }
+}
+
+function init() {
+  S = newState();
+  genRiver();
+  newColorShop();
+  newColorShop();
+  updateHud();
+}
+
+// ---------- pathfinding ----------
+// BFS through road tiles. Endpoint tiles (houses, shops) are only entered when they satisfy isGoal.
+function bfs(starts, isGoal) {
+  const prev = new Int32Array(COLS * ROWS).fill(-2);
+  const q = [];
+  for (const [x, y] of starts) { prev[idx(x, y)] = -1; q.push(idx(x, y)); }
+  for (let h = 0; h < q.length; h++) {
+    const cur = q[h], cx = cur % COLS, cy = (cur / COLS) | 0;
+    const fromEndpoint = !isRoad(S.tiles[cur]);
+    for (const [dx, dy] of DIRS) {
+      const nx = cx + dx, ny = cy + dy;
+      if (!inb(nx, ny)) continue;
+      const ni = idx(nx, ny);
+      if (prev[ni] !== -2) continue;
+      const t = S.tiles[ni];
+      if (isRoad(t)) { prev[ni] = cur; q.push(ni); }
+      else if (!fromEndpoint && (t === HOUSE || t === SHOP) && isGoal(nx, ny)) {
+        prev[ni] = cur;
+        const path = [];
+        for (let k = ni; k !== -1; k = prev[k]) path.push({ x: k % COLS, y: (k / COLS) | 0 });
+        return path.reverse();
+      }
+    }
+  }
+  return null;
+}
+
+function shopTiles(s) { return [[s.x, s.y], [s.x + 1, s.y], [s.x, s.y + 1], [s.x + 1, s.y + 1]]; }
+
+function dispatch() {
+  // shops with the most waiting pins get served first
+  const shops = [...S.shops].sort((a, b) => (b.pins - b.assigned) - (a.pins - a.assigned));
+  for (const s of shops) {
+    while (s.pins - s.assigned > 0) {
+      const path = bfs(shopTiles(s), (x, y) => {
+        const h = S.owner[idx(x, y)];
+        return T(x, y) === HOUSE && h.color === s.color && h.cars.some(c => c.state === 'idle');
+      });
+      if (!path) break;
+      path.reverse(); // house -> shop
+      const h = S.owner[idx(path[0].x, path[0].y)];
+      const car = h.cars.find(c => c.state === 'idle');
+      car.state = 'out'; car.path = path; car.i = 0; car.t = 0; car.shop = s; car.stuck = 0;
+      car.wait = h.cars.filter(c => c.state === 'out' && c.i === 0 && c !== car).length * 0.5;
+      s.assigned++;
+    }
+  }
+}
+
+function carTile(c) {
+  const p = c.path[Math.min(c.path.length - 1, c.t < 0.5 ? c.i : c.i + 1)];
+  return p;
+}
+
+function reroute(c) {
+  const cur = carTile(c);
+  let path = null;
+  if (c.state === 'out') {
+    const s = c.shop;
+    path = bfs([[cur.x, cur.y]], (x, y) => S.owner[idx(x, y)] === s);
+  } else {
+    const h = c.house;
+    path = bfs([[cur.x, cur.y]], (x, y) => x === h.x && y === h.y);
+  }
+  if (path) { c.path = path; c.i = 0; c.t = 0; return; }
+  // stranded: tow the car home
+  if (c.state === 'out') c.shop.assigned--;
+  c.state = 'idle'; c.path = null;
+}
+
+function pathUsesTile(c, x, y) {
+  if (!c.path) return false;
+  for (let k = c.i; k < c.path.length; k++) if (c.path[k].x === x && c.path[k].y === y) return true;
+  return false;
+}
+
+// ---------- building ----------
+function build(x, y) {
+  if (!inb(x, y)) return;
+  const t = T(x, y);
+  if (t === EMPTY && S.roads > 0) { S.tiles[idx(x, y)] = ROAD; S.roads--; }
+  else if (t === WATER && S.bridges > 0) { S.tiles[idx(x, y)] = BRIDGE; S.bridges--; }
+  else return;
+  updateHud();
+}
+
+function erase(x, y) {
+  if (!inb(x, y)) return;
+  const t = T(x, y);
+  if (!isRoad(t)) return;
+  if (S.cars.some(c => c.path && c.state !== 'idle' && (() => { const p = carTile(c); return p.x === x && p.y === y; })())) return;
+  S.tiles[idx(x, y)] = t === BRIDGE ? WATER : EMPTY;
+  if (t === BRIDGE) S.bridges++; else S.roads++;
+  for (const c of S.cars) if (c.state !== 'idle' && pathUsesTile(c, x, y)) reroute(c);
+  updateHud();
+}
+
+// ---------- simulation ----------
+function laneOff(dx, dy) { return [-dy * 0.19, dx * 0.19]; }
+
+function segDir(c, k) {
+  const p = c.path;
+  if (k < 0 || k >= p.length - 1) return null;
+  return [p[k + 1].x - p[k].x, p[k + 1].y - p[k].y];
+}
+
+function carPose(c) {
+  const a = c.path[c.i], b = c.path[c.i + 1];
+  const d = segDir(c, c.i);
+  const x = a.x + (b.x - a.x) * c.t + 0.5, y = a.y + (b.y - a.y) * c.t + 0.5;
+  let o = laneOff(d[0], d[1]), dir = d;
+  const blend = (d2, w) => {
+    if (!d2) return;
+    const o2 = laneOff(d2[0], d2[1]);
+    o = [o[0] + (o2[0] - o[0]) * w, o[1] + (o2[1] - o[1]) * w];
+    dir = [dir[0] + (d2[0] - dir[0]) * w, dir[1] + (d2[1] - dir[1]) * w];
+  };
+  if (c.t > 0.5) blend(segDir(c, c.i + 1), c.t - 0.5);
+  else blend(segDir(c, c.i - 1), 0.5 - c.t);
+  return { x: x + o[0], y: y + o[1], dx: d[0], dy: d[1], ang: Math.atan2(dir[1], dir[0]) };
+}
+
+function stepCars(dt) {
+  const moving = S.cars.filter(c => c.state === 'out' || c.state === 'back');
+  const poses = new Map();
+  for (const c of moving) poses.set(c, carPose(c));
+  for (const c of moving) {
+    if (c.wait > 0) { c.wait -= dt; continue; }
+    const p = poses.get(c);
+    let blocked = false;
+    for (const o of moving) {
+      if (o === c || o.wait > 0 || !o.path) continue;
+      const q = poses.get(o);
+      if (q.dx !== p.dx || q.dy !== p.dy) continue;
+      const rx = q.x - p.x, ry = q.y - p.y;
+      const ahead = rx * p.dx + ry * p.dy, side = Math.abs(rx * -p.dy + ry * p.dx);
+      if (ahead > 0 && ahead < 0.42 && side < 0.2) { blocked = true; break; }
+    }
+    // cars crossing an intersection at right angles yield to cars already inside it
+    if (!blocked && c.t > 0.2 && c.t < 0.35) {
+      const nt = c.path[c.i + 1];
+      for (const o of moving) {
+        if (o === c || o.wait > 0 || !o.path) continue;
+        const q = poses.get(o);
+        if (q.dx === p.dx && q.dy === p.dy) continue;
+        if (q.dx === -p.dx && q.dy === -p.dy) continue;
+        const ot = carTile(o);
+        if (ot.x === nt.x && ot.y === nt.y && isRoad(T(nt.x, nt.y))) { blocked = true; break; }
+      }
+    }
+    let v = S.carSpeed;
+    if (blocked) {
+      c.stuck += dt;
+      if (c.stuck < 2.5) continue;
+      v *= 0.4; // creep forward so gridlock eventually clears
+    } else c.stuck = Math.max(0, c.stuck - dt * 2);
+    c.t += v * dt;
+    while (c.t >= 1) {
+      c.t -= 1; c.i++;
+      if (c.i >= c.path.length - 1) { arrive(c); break; }
+    }
+  }
+}
+
+function arrive(c) {
+  if (c.state === 'out') {
+    const s = c.shop;
+    s.pins = Math.max(0, s.pins - 1); s.assigned--;
+    S.score++;
+    c.state = 'back'; c.path = c.path.slice().reverse(); c.i = 0; c.t = 0; c.wait = 0.6; c.shop = null;
+    updateHud();
+  } else {
+    c.state = 'idle'; c.path = null;
+  }
+}
+
+function stepShops(dt) {
+  const difficulty = 1 + S.time / 240;
+  for (const s of S.shops) {
+    const houses = S.houses.filter(h => h.color === s.color).length;
+    const shopsOfColor = S.shops.filter(o => o.color === s.color).length;
+    const interval = Math.max(1.1, 13 / (houses / shopsOfColor + 0.5) / difficulty);
+    // new shops warm up gently
+    const warm = Math.min(1, (S.time - s.born) / 20 + 0.3);
+    s.acc += dt * warm;
+    if (s.acc >= interval) { s.acc -= interval; s.pins = Math.min(MAX_PINS, s.pins + 1); }
+    if (s.pins >= WARN_PINS) s.overflow += dt / OVERFLOW_TIME * (1 + (s.pins - WARN_PINS) * 0.15);
+    else s.overflow = Math.max(0, s.overflow - dt / 15);
+    if (s.overflow >= 1) { gameOver(); return; }
+  }
+}
+
+function stepSpawns(dt) {
+  S.houseTimer -= dt;
+  if (S.houseTimer <= 0) {
+    // favour colours under the most pressure
+    let best = null, bestP = -1;
+    for (const s of S.shops) {
+      const h = S.houses.filter(x => x.color === s.color).length;
+      const p = (s.pins + 1) / (h + 1) + Math.random();
+      if (p > bestP) { bestP = p; best = s.color; }
+    }
+    if (best !== null) placeHouse(best);
+    S.houseTimer = Math.max(4, 10 - S.time / 90) * rand(0.7, 1.3);
+  }
+  S.shopTimer -= dt;
+  if (S.shopTimer <= 0) {
+    newColorShop();
+    S.shopTimer = rand(55, 80);
+  }
+}
+
+function update(dt) {
+  S.time += dt;
+  S.weekTime += dt;
+  S.dispatchTimer -= dt;
+  if (S.dispatchTimer <= 0) { dispatch(); S.dispatchTimer = 0.25; }
+  stepCars(dt);
+  stepShops(dt);
+  if (S.over) return;
+  stepSpawns(dt);
+  if (S.weekTime >= WEEK_LEN) { S.weekTime = 0; S.week++; S.roads += 10; updateHud(); offerUpgrade(); }
+}
+
+// ---------- upgrades ----------
+const UPGRADES = [
+  { ico: '🛣️', name: '+20 roads', desc: 'More asphalt to work with', apply: () => { S.roads += 20; } },
+  { ico: '🌉', name: '+2 bridges', desc: 'Cross rivers and ponds', apply: () => { S.bridges += 2; } },
+  { ico: '⚡', name: 'Smoother traffic', desc: 'All cars drive 15% faster', apply: () => { S.carSpeed *= 1.15; } },
+  { ico: '🚗', name: 'Second garage', desc: 'Every house gets +1 car (max 4)', apply: () => {
+      S.carsPerHouse = Math.min(4, S.carsPerHouse + 1);
+      for (const h of S.houses) while (h.cars.length < S.carsPerHouse) h.cars.push(makeCar(h));
+    } },
+];
+
+function offerUpgrade() {
+  S.paused = true;
+  const pool = UPGRADES.filter(u => u.name !== 'Second garage' || S.carsPerHouse < 4);
+  const picks = [];
+  while (picks.length < 2) {
+    const u = pool[randi(0, pool.length - 1)];
+    if (!picks.includes(u)) picks.push(u);
+  }
+  $('upTitle').textContent = 'Week ' + S.week;
+  const box = $('choices');
+  box.innerHTML = '';
+  for (const u of picks) {
+    const b = document.createElement('button');
+    b.className = 'choice';
+    b.innerHTML = `<span class="ico">${u.ico}</span><b>${u.name}</b><span>${u.desc}</span>`;
+    b.onclick = () => { u.apply(); updateHud(); $('upgrade').classList.remove('show'); S.paused = false; syncButtons(); };
+    box.appendChild(b);
+  }
+  $('upgrade').classList.add('show');
+  syncButtons();
+}
+
+function gameOver() {
+  S.over = true; S.paused = true;
+  let best = 0;
+  try { best = +localStorage.getItem('cityroads-best') || 0; if (S.score > best) localStorage.setItem('cityroads-best', S.score); } catch (e) {}
+  const nb = S.score > best;
+  $('overText').textContent = `A shop was overwhelmed in week ${S.week}. You completed ${S.score} trips.` +
+    (nb ? ' New best!' : best ? ` Best: ${best}.` : '');
+  $('over').classList.add('show');
+}
+
+// ---------- rendering ----------
+function resize() {
+  dpr = window.devicePixelRatio || 1;
+  const w = window.innerWidth - 16, h = window.innerHeight - 110;
+  tile = Math.max(10, Math.floor(Math.min(w / COLS, h / ROWS)));
+  canvas.style.width = tile * COLS + 'px';
+  canvas.style.height = tile * ROWS + 'px';
+  canvas.width = tile * COLS * dpr;
+  canvas.height = tile * ROWS * dpr;
+}
+
+function rr(x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+
+let hover = null;
+
+function draw() {
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const W = tile * COLS, H = tile * ROWS;
+  ctx.fillStyle = '#e9e4d6';
+  ctx.fillRect(0, 0, W, H);
+
+  // subtle grid
+  ctx.strokeStyle = 'rgba(0,0,0,0.035)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  for (let x = 1; x < COLS; x++) { ctx.moveTo(x * tile + 0.5, 0); ctx.lineTo(x * tile + 0.5, H); }
+  for (let y = 1; y < ROWS; y++) { ctx.moveTo(0, y * tile + 0.5); ctx.lineTo(W, y * tile + 0.5); }
+  ctx.stroke();
+
+  // water
+  ctx.fillStyle = '#a9d6e8';
+  for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) {
+    const t = T(x, y);
+    if (t === WATER || t === BRIDGE) ctx.fillRect(x * tile, y * tile, tile + 0.5, tile + 0.5);
+  }
+
+  // roads
+  const rw = tile * 0.56;
+  for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) {
+    const t = T(x, y);
+    if (!isRoad(t)) continue;
+    const cx = x * tile + tile / 2, cy = y * tile + tile / 2;
+    if (t === BRIDGE) {
+      ctx.fillStyle = '#c9c1b0';
+      ctx.fillRect(cx - rw / 2 - tile * 0.08, cy - rw / 2 - tile * 0.08, rw + tile * 0.16, rw + tile * 0.16);
+    }
+    ctx.fillStyle = '#4b4a52';
+    ctx.fillRect(cx - rw / 2, cy - rw / 2, rw, rw);
+    for (const [dx, dy] of DIRS) {
+      const nx = x + dx, ny = y + dy;
+      if (!inb(nx, ny)) continue;
+      const nt = T(nx, ny);
+      if (!(isRoad(nt) || nt === HOUSE || nt === SHOP)) continue;
+      if (t === BRIDGE) {
+        ctx.fillStyle = '#c9c1b0';
+        if (dx) ctx.fillRect(cx, cy - rw / 2 - tile * 0.08, dx * tile / 2 + (dx > 0 ? 0.5 : -0.5), rw + tile * 0.16);
+        else ctx.fillRect(cx - rw / 2 - tile * 0.08, cy, rw + tile * 0.16, dy * tile / 2 + (dy > 0 ? 0.5 : -0.5));
+        ctx.fillStyle = '#4b4a52';
+      }
+      const len = nt === HOUSE ? tile * 0.5 : tile / 2 + 0.5;
+      if (dx) ctx.fillRect(cx, cy - rw / 2, dx * len, rw);
+      else ctx.fillRect(cx - rw / 2, cy, rw, dy * len);
+    }
+  }
+  // dashed centre lines on straight segments
+  ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+  ctx.lineWidth = Math.max(1, tile * 0.04);
+  ctx.setLineDash([tile * 0.14, tile * 0.14]);
+  ctx.beginPath();
+  for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) {
+    if (!isRoad(T(x, y))) continue;
+    const cx = x * tile + tile / 2, cy = y * tile + tile / 2;
+    const conn = d => { const nx = x + d[0], ny = y + d[1]; return inb(nx, ny) && isRoad(T(nx, ny)); };
+    if (conn([1, 0])) { ctx.moveTo(cx, cy); ctx.lineTo(cx + tile, cy); }
+    if (conn([0, 1])) { ctx.moveTo(cx, cy); ctx.lineTo(cx, cy + tile); }
+  }
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // shops
+  for (const s of S.shops) {
+    const x = s.x * tile, y = s.y * tile, sz = tile * 2;
+    const pad = tile * 0.12;
+    ctx.fillStyle = 'rgba(0,0,0,0.12)';
+    rr(x + pad, y + pad + tile * 0.06, sz - pad * 2, sz - pad * 2, tile * 0.3); ctx.fill();
+    ctx.fillStyle = COLORS[s.color];
+    rr(x + pad, y + pad, sz - pad * 2, sz - pad * 2, tile * 0.3); ctx.fill();
+    // pins
+    const cols = 4, pr = tile * 0.13, gap = tile * 0.36;
+    const ox = x + sz / 2 - gap * 1.5, oy = y + sz / 2 - gap;
+    for (let k = 0; k < s.pins; k++) {
+      const px = ox + (k % cols) * gap, py = oy + Math.floor(k / cols) * gap;
+      ctx.fillStyle = k >= WARN_PINS ? '#fff' : 'rgba(255,255,255,0.85)';
+      ctx.beginPath(); ctx.arc(px, py, pr, 0, Math.PI * 2); ctx.fill();
+    }
+    // overflow ring
+    if (s.overflow > 0.001) {
+      const cx = x + sz / 2, cy = y + sz / 2, r = sz * 0.62;
+      ctx.lineWidth = tile * 0.14;
+      ctx.strokeStyle = 'rgba(0,0,0,0.1)';
+      ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.stroke();
+      const pulse = 0.6 + 0.4 * Math.sin(S.time * 8);
+      ctx.strokeStyle = s.overflow > 0.6 ? `rgba(214,40,40,${pulse})` : DARK[s.color];
+      ctx.beginPath(); ctx.arc(cx, cy, r, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * s.overflow); ctx.stroke();
+    }
+  }
+
+  // houses
+  for (const h of S.houses) {
+    const x = h.x * tile, y = h.y * tile;
+    const age = Math.min(1, (S.time - h.born) * 3);
+    const sz = tile * 0.78 * (0.4 + 0.6 * age), o = (tile - sz) / 2;
+    ctx.fillStyle = 'rgba(0,0,0,0.12)';
+    rr(x + o, y + o + tile * 0.05, sz, sz, tile * 0.16); ctx.fill();
+    ctx.fillStyle = COLORS[h.color];
+    rr(x + o, y + o, sz, sz, tile * 0.16); ctx.fill();
+    // roof ridge
+    ctx.strokeStyle = DARK[h.color];
+    ctx.lineWidth = Math.max(1, tile * 0.07);
+    ctx.beginPath(); ctx.moveTo(x + o + sz * 0.2, y + tile / 2); ctx.lineTo(x + o + sz * 0.8, y + tile / 2); ctx.stroke();
+    // parked cars indicator
+    const idle = h.cars.filter(c => c.state === 'idle').length;
+    ctx.fillStyle = '#fff';
+    for (let k = 0; k < idle; k++) {
+      ctx.beginPath();
+      ctx.arc(x + tile / 2 + (k - (idle - 1) / 2) * tile * 0.17, y + tile * 0.7, tile * 0.055, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  // cars
+  for (const c of S.cars) {
+    if (c.state === 'idle') continue;
+    const p = carPose(c);
+    ctx.save();
+    ctx.translate(p.x * tile, p.y * tile);
+    ctx.rotate(p.ang);
+    const L = tile * 0.34, Wd = tile * 0.2;
+    ctx.fillStyle = 'rgba(0,0,0,0.18)';
+    rr(-L / 2 + 1, -Wd / 2 + 1.5, L, Wd, Wd * 0.35); ctx.fill();
+    ctx.fillStyle = COLORS[c.color];
+    rr(-L / 2, -Wd / 2, L, Wd, Wd * 0.35); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.55)';
+    ctx.fillRect(L * 0.08, -Wd * 0.32, L * 0.18, Wd * 0.64);
+    if (c.state === 'back') { // returning cars carry a little parcel
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(-L * 0.38, -Wd * 0.22, L * 0.26, Wd * 0.44);
+    }
+    ctx.restore();
+  }
+
+  // hover cursor
+  if (hover && inb(hover.x, hover.y) && !S.over) {
+    const t = T(hover.x, hover.y);
+    const erasing = eraseMode || dragMode === 'erase';
+    let ok = erasing ? isRoad(t) : (t === EMPTY && S.roads > 0) || (t === WATER && S.bridges > 0);
+    ctx.strokeStyle = ok ? (erasing ? 'rgba(214,40,40,0.8)' : 'rgba(45,43,51,0.6)') : 'rgba(45,43,51,0.15)';
+    ctx.lineWidth = 2;
+    rr(hover.x * tile + 2, hover.y * tile + 2, tile - 4, tile - 4, tile * 0.18);
+    ctx.stroke();
+  }
+
+  // week-change dimming while paused
+  if (S.paused && !S.over && !$('upgrade').classList.contains('show') && !$('start').classList.contains('show')) {
+    ctx.fillStyle = 'rgba(233,228,214,0.45)';
+    ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = '#2d2b33';
+    ctx.font = `600 ${Math.round(tile * 0.9)}px system-ui, sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.fillText('Paused', W / 2, H / 2);
+  }
+}
+
+// ---------- HUD ----------
+function updateHud() {
+  $('score').textContent = S.score;
+  $('week').textContent = S.week;
+  $('roads').textContent = S.roads;
+  $('bridges').textContent = S.bridges;
+}
+
+let eraseMode = false;
+function syncButtons() {
+  $('btnErase').classList.toggle('on', eraseMode);
+  $('btnPause').textContent = S.paused && !S.over ? 'Resume' : 'Pause';
+  $('btnSpeed').textContent = S.speed + '×';
+}
+
+// ---------- input ----------
+let dragMode = null, last = null;
+
+function tileAt(e) {
+  const r = canvas.getBoundingClientRect();
+  return { x: Math.floor((e.clientX - r.left) / tile), y: Math.floor((e.clientY - r.top) / tile) };
+}
+
+function apply(x, y) { (dragMode === 'erase' ? erase : build)(x, y); }
+
+function strokeTo(p) {
+  // walk tile-by-tile in 4-connected steps so roads stay contiguous
+  let { x, y } = last;
+  while (x !== p.x || y !== p.y) {
+    if (Math.abs(p.x - x) >= Math.abs(p.y - y)) x += Math.sign(p.x - x); else y += Math.sign(p.y - y);
+    apply(x, y);
+  }
+  last = p;
+}
+
+canvas.addEventListener('pointerdown', e => {
+  if (S.over || $('upgrade').classList.contains('show')) return;
+  canvas.setPointerCapture(e.pointerId);
+  dragMode = (e.button === 2 || eraseMode) ? 'erase' : 'build';
+  last = tileAt(e);
+  apply(last.x, last.y);
+});
+canvas.addEventListener('pointermove', e => {
+  hover = tileAt(e);
+  if (dragMode && last) strokeTo(hover);
+});
+const endDrag = () => { dragMode = null; last = null; };
+canvas.addEventListener('pointerup', endDrag);
+canvas.addEventListener('pointercancel', endDrag);
+canvas.addEventListener('pointerleave', () => { hover = null; });
+canvas.addEventListener('contextmenu', e => e.preventDefault());
+
+function togglePause() {
+  if (S.over || $('upgrade').classList.contains('show') || $('start').classList.contains('show')) return;
+  S.paused = !S.paused; syncButtons();
+}
+function toggleSpeed() { S.speed = S.speed === 1 ? 2 : S.speed === 2 ? 3 : 1; syncButtons(); }
+
+$('btnErase').onclick = () => { eraseMode = !eraseMode; syncButtons(); };
+$('btnPause').onclick = togglePause;
+$('btnSpeed').onclick = toggleSpeed;
+$('btnStart').onclick = () => { $('start').classList.remove('show'); S.paused = false; syncButtons(); };
+$('btnRestart').onclick = () => { $('over').classList.remove('show'); init(); S.paused = false; syncButtons(); };
+window.addEventListener('keydown', e => {
+  if (e.code === 'Space') { e.preventDefault(); togglePause(); }
+  else if (e.key === 'e' || e.key === 'E') { eraseMode = !eraseMode; syncButtons(); }
+  else if (e.key === 'f' || e.key === 'F') toggleSpeed();
+});
+window.addEventListener('resize', resize);
+
+// ---------- loop ----------
+let prevT = performance.now();
+function frame(now) {
+  const dt = Math.min(0.05, (now - prevT) / 1000);
+  prevT = now;
+  if (!S.paused && !S.over) {
+    const steps = S.speed;
+    for (let k = 0; k < steps && !S.paused && !S.over; k++) update(dt);
+  }
+  $('weekfill').style.width = (S.weekTime / WEEK_LEN * 100) + '%';
+  draw();
+  requestAnimationFrame(frame);
+}
+
+// handy for debugging from the console
+window.cityroads = { state: () => S, build, erase };
+
+init();
+resize();
+syncButtons();
+requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
