@@ -58,6 +58,8 @@ lay themselves out, and every resident's commute has to get through the network 
 - **Procedural parks.** Each painted park lays out paths from every road entrance to a fountain or
   gazebo, adds a pond with a promenade when it's big enough, and fills in trees, blossom trees,
   flowerbeds, benches, lamps and playgrounds, all growing in with a ripple.
+- **No clipping.** A road that would pass through another one too close in height to clear it is
+  refused. The game asks you to start the ramp further away instead.
 - **Auto-fix traffic.** The **Auto-fix** button in the top bar is on by default. When a junction
   or road stays jammed for a couple of months, traffic engineers fix the worst one:
   - a plain junction gets traffic lights
@@ -80,13 +82,20 @@ When founding a city, pick:
 - **Play:** *Build it yourself*, or *Grows by itself* (see below).
 - **Budget:** Tight ($10k), Normal ($25k), Rich ($100k) or Unlimited (sandbox).
 - **Traffic:** Light (×0.6 cars, and nobody abandons their home), Normal, or Rush hour (×1.5 cars).
-- **Land:** River valley, Lakes, or Plains with no water.
+- **Land:** River valley, Lakes, or Plains with no water. Lakes come in many shapes: long winding reservoirs, lobed lakes with bays, and lakes with two arms.
 - **Map:** Standard, or Huge (three times as wide and tall, so 9× the area, with more lakes).
 - **Unlocks:** earn them with population, or start with everything open.
 
 ## Grows by itself
 
-In this mode the town plans itself while you watch, the way real cities grow:
+In this mode the town plans itself while you watch, the way real cities grow. Pick a **growth style**
+when founding the city. All three use the same buildings; only the road layout changes:
+- **Dense American:** closely spaced avenues and tight street grids almost everywhere.
+- **Suburban American:** a downtown grid surrounded by loops, crescents and cul-de-sacs.
+- **Rural American:** a small grid town with country roads beyond it. Homes are strung out along the
+  roads, and the woods between them are left standing.
+
+In every style:
 - **Wandering avenues.** Avenues spread out from the highway, each bending its own way, with two
   boulevards crossing at a grand roundabout in the centre. Some avenues stop at T-junctions, and
   neighbourhoods meet across a strip of green instead. Where avenues cross, the town builds traffic
@@ -104,8 +113,14 @@ In this mode the town plans itself while you watch, the way real cities grow:
   school, police, hospital, and a stadium with its own car park.
 - **Traffic upgrades.** Busy junctions become lights or roundabouts, and jammed avenues are widened
   to three lanes each way. Once traffic gets bad, the town runs elevated freeways over its busiest
-  avenues. Each freeway has ramps down to the cross avenues and climbs over bridges and other
+  avenues. Each freeway replaces the avenue beneath it, so the two never overlap. Side streets stop
+  short of it, ramps come down to the cross avenues, and freeways climb over bridges and other
   freeways.
+- **Zoning follows the roads.** Shops and offices line the avenues and boulevards, homes fill the
+  quiet streets behind them, downtown mixes offices with apartments, and industry keeps to its own
+  districts.
+- **Big venues and an airport.** A mall and the sports venues each get a whole neighbourhood, wrapped
+  in car parks and green. The airport is built past the edge of town on its own access avenue.
 - **Rezoning.** Shop lots nobody wants for a long time are rezoned for homes.
 - **Bridges.** Avenues cross rivers on bridges, and the town only expands where it can connect.
 
@@ -117,7 +132,13 @@ want to step in. Funds are unlimited and everything is unlocked.
 
 The **Places** tool builds city services that face the nearest road. Each adds jobs and land value,
 and costs upkeep each month:
-- **Stadium:** hosts match days. Crowds drive in from across the city, then leave together after the match.
+- **Airport:** a large site with terminal, car parks, apron, taxiway and a runway where planes take
+  off. Travellers and workers drive out to it all day.
+- **Shopping mall:** anchor stores around a skylit concourse, ringed by car parks. Shoppers come from
+  across the city.
+- **Sports venues:** NFL stadium, college football stadium, MLB ballpark, NBA arena and MLS soccer
+  stadium. Each looks different and hosts game days: crowds drive in from across the city, then
+  leave together after the game.
 - **Hospital** and **School:** raise land value and draw residents.
 - **Fire station** and **Police station:** make the neighbourhood feel safer.
 
