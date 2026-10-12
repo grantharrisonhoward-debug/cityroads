@@ -153,6 +153,25 @@ body { background: var(--bg); color: var(--ink); font-family: var(--f-body); fon
 .actions { display: flex; gap: 8px; flex-wrap: wrap; }
 .btn { border: 0; border-radius: 12px; padding: 11px 20px; font: 600 15px var(--f-body); cursor: pointer; background: var(--panel-2); color: var(--ink); }
 .btn.primary { background: var(--sign); color: var(--sign-ink); }
+.btn.sm { padding: 7px 12px; font-size: 13px; border-radius: 9px; }
+.btn.danger { background: var(--danger); color: #fff; }
+.btn:disabled { opacity: 0.55; cursor: default; }
+.namefield { font: 600 15px var(--f-body); color: var(--ink); background: var(--panel-2); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; min-width: 0; flex: 1 1 160px; }
+.namefield:focus { outline: 2px solid var(--sign); }
+.sub-h { font: 600 11px var(--f-body); letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); margin: 20px 0 8px; }
+.cardhead { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 12px; }
+.cardhead h2 { font: 700 28px var(--f-display); margin: 0; }
+.hint-s { font-size: 12.5px; color: var(--muted); align-self: center; }
+.citylist { display: flex; flex-direction: column; gap: 6px; }
+.citylist .empty { margin: 0; font-size: 13.5px; }
+.cityrow { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; background: var(--panel-2); border-radius: 12px; padding: 10px 12px; }
+.cityrow.current { outline: 2px solid var(--sign); }
+.cityrow .ci { display: flex; flex-direction: column; min-width: 0; }
+.cityrow .ci b { font: 700 16px var(--f-display); overflow-wrap: anywhere; }
+.cityrow .ci small { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.cityrow .ca { display: flex; gap: 6px; }
+.citiesbtn { font: 600 13px var(--f-body); border: 0; border-radius: 9px; padding: 7px 12px; background: var(--panel-2); color: var(--ink); cursor: pointer; }
+.citiesbtn:hover { background: var(--sign); color: var(--sign-ink); }
 
 @media (max-width: 640px) {
   .cell { padding: 4px 8px; }
@@ -184,6 +203,7 @@ body { background: var(--bg); color: var(--ink); font-family: var(--f-body); fon
       <div class="meter"><div class="track"><div class="fill" id="dC" style="background:var(--com)"></div></div><span>C</span></div>
       <div class="meter"><div class="track"><div class="fill" id="dI" style="background:var(--ind)"></div></div><span>I</span></div>
     </div>
+    <div class="cell"><button id="btnCities" class="citiesbtn" title="Save, load or start cities">Cities</button></div>
     <div class="cell"><label id="sDate">Jan 2026</label>
       <div class="speeds">
         <button id="sp0" title="Pause (Space)" aria-label="Pause">II</button>
@@ -302,9 +322,28 @@ body { background: var(--bg); color: var(--ink); font-family: var(--f-body); fon
       <dt>Camera</dt><dd>Scroll or pinch to zoom. Right-drag, Space-drag or WASD to pan.</dd>
     </dl>
     <div class="actions">
+      <input id="introName" class="namefield" aria-label="Name for the new city" maxlength="18">
       <button class="btn primary" id="btnNew">Found a new city</button>
-      <button class="btn" id="btnContinue" hidden>Continue</button>
     </div>
+    <h2 class="sub-h">Your cities</h2>
+    <div id="introCities" class="citylist"></div>
+  </div>
+</div>
+
+<div class="overlay" id="cities" hidden>
+  <div class="card" role="dialog" aria-labelledby="citiesTitle">
+    <div class="cardhead"><h2 id="citiesTitle">Cities</h2><button class="btn sm" id="btnCloseCities">Close</button></div>
+    <div class="actions">
+      <button class="btn primary" id="btnSaveNow">Save this city</button>
+      <span class="hint-s">Cities also save automatically. Ctrl+S saves too.</span>
+    </div>
+    <h3 class="sub-h">Start a new city</h3>
+    <div class="actions">
+      <input id="newName" class="namefield" aria-label="Name for the new city" maxlength="18">
+      <button class="btn" id="btnNewCity">Found it</button>
+    </div>
+    <h3 class="sub-h">Saved cities</h3>
+    <div id="menuCities" class="citylist"></div>
   </div>
 </div>
 
@@ -1711,7 +1750,7 @@ function endOfMonth() {
     toast(`${G.name} reached ${fmt(m)} residents. Grant: $${fmt(grant)}.`, 'good');
   }
   checkUnlocks();
-  if (G.month % 3 === 0) save();
+  if (G.month % 3 === 0) save(false);
 }
 function checkUnlocks() {
   const un = (key, cond, msg) => { if (!G.unlocked[key] && cond) { G.unlocked[key] = true; toast(msg, 'good'); syncLocks(); } };
@@ -2100,7 +2139,7 @@ function serialize() {
   const alive = new Uint8Array(G.trees.length);
   G.trees.forEach((t, i) => { alive[i] = t.alive ? 1 : 0; });
   return {
-    v: 4, seed: G.seed, name: G.name, money: G.money, time: G.time, month: G.month, monthAcc: G.monthAcc, net: G.net, milestone: G.milestone,
+    v: 4, slot: G.slot, seed: G.seed, name: G.name, money: G.money, time: G.time, month: G.month, monthAcc: G.monthAcc, net: G.net, milestone: G.milestone,
     unlocked: G.unlocked, outs: G.outs, nextId: G.nextId, commute: G.commute,
     nodes: [...G.nodes.values()].map(n => [n.id, r1(n.x), r1(n.y), n.ctl, r1(n.z)]),
     edges: [...G.edges.values()].map(e => [e.id, e.a, e.b, e.spec, e.pts.flatMap(p => [r1(p.x), r1(p.y), Math.round(p.z * 100) / 100])]),
@@ -2108,8 +2147,40 @@ function serialize() {
     zone: toB64(G.zone), trees: toB64(alive),
   };
 }
-function save() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(serialize())); } catch (e) { /* storage unavailable */ } }
-function loadSaved() { try { const s = localStorage.getItem(SAVE_KEY); return s ? JSON.parse(s) : null; } catch (e) { return null; } }
+// Saved cities live in browser storage: an index of slots plus one entry per city.
+const INDEX_KEY = 'cityroads-cities', CITY_KEY = id => 'cityroads-city-' + id;
+function readIndex() { try { return JSON.parse(localStorage.getItem(INDEX_KEY) || '[]'); } catch (e) { return []; } }
+function writeIndex(list) { localStorage.setItem(INDEX_KEY, JSON.stringify(list)); }
+function migrateLegacy() {
+  try {
+    const old = localStorage.getItem(SAVE_KEY);
+    if (!old || readIndex().length) return;
+    const d = JSON.parse(old), id = 'c' + Date.now().toString(36);
+    localStorage.setItem(CITY_KEY(id), old);
+    writeIndex([{ id, name: d.name || 'Riverton', pop: 0, month: d.month || 0, savedAt: Date.now() }]);
+    localStorage.removeItem(SAVE_KEY);
+  } catch (e) { /* storage unavailable */ }
+}
+function save(manual) {
+  if (!G || state !== 'play') return false;
+  if (!G.slot) G.slot = 'c' + Date.now().toString(36) + ((Math.random() * 1e4) | 0).toString(36);
+  try {
+    localStorage.setItem(CITY_KEY(G.slot), JSON.stringify(serialize()));
+    const list = readIndex().filter(c => c.id !== G.slot);
+    list.unshift({ id: G.slot, name: G.name, pop: G.pop, month: G.month, savedAt: Date.now() });
+    writeIndex(list);
+    if (manual) toast(`Saved ${G.name}.`, 'good');
+    return true;
+  } catch (e) {
+    if (manual) toast('Could not save: browser storage is full or blocked. Delete an old city and try again.', 'bad');
+    return false;
+  }
+}
+function loadSlot(id) { try { const s = localStorage.getItem(CITY_KEY(id)); return s ? JSON.parse(s) : null; } catch (e) { return null; } }
+function deleteSlot(id) {
+  try { localStorage.removeItem(CITY_KEY(id)); writeIndex(readIndex().filter(c => c.id !== id)); } catch (e) { /* storage unavailable */ }
+  if (G && G.slot === id) G.slot = null;
+}
 
 // =====================================================================
 // boot
@@ -2155,7 +2226,7 @@ function finishBoot() {
 function loadCity(d) {
   G = newCity(d.seed);
   genTerrain(G);
-  Object.assign(G, { name: d.name, money: d.money, time: d.time, month: d.month, monthAcc: d.monthAcc, net: d.net, milestone: d.milestone, unlocked: d.unlocked || {}, commute: d.commute || 1 });
+  Object.assign(G, { slot: d.slot, name: d.name, money: d.money, time: d.time, month: d.month, monthAcc: d.monthAcc, net: d.net, milestone: d.milestone, unlocked: d.unlocked || {}, commute: d.commute || 1 });
   G.zone.set(fromB64(d.zone));
   const alive = fromB64(d.trees);
   G.trees.forEach((t, i) => { t.alive = alive[i] !== 0; });
@@ -3533,6 +3604,7 @@ for (const b of document.querySelectorAll('[data-brush]')) b.addEventListener('c
 for (const b of document.querySelectorAll('[data-doze]')) b.addEventListener('click', () => setDoze(b.dataset.doze));
 for (const b of document.querySelectorAll('[data-view]')) b.addEventListener('click', () => setView(b.dataset.view));
 $('cityName').addEventListener('input', e => { if (G) G.name = e.target.value.trim() || 'Riverton'; });
+$('cityName').addEventListener('change', () => save(false));
 
 const toasted = new Set();
 function toastOnce(key, msg, kind) { if (toasted.has(key)) return; toasted.add(key); toast(msg, kind); setTimeout(() => toasted.delete(key), 60000); }
@@ -3587,20 +3659,73 @@ function begin(fn) {
   cam.x = 420; cam.y = G.hy; cam.z = clamp(Math.min(innerWidth, innerHeight * 1.4) / 520, 0.9, 2.2);
   $('intro').hidden = true;
   state = 'play';
+  $('cityName').value = G.name;
   setTool('road');
   toast('Draw streets off the highway, then paint homes beside them.');
 }
-$('btnNew').addEventListener('click', () => begin(() => { foundCity((Math.random() * 1e9) | 0); G.name = $('cityName').value.trim() || 'Riverton'; }));
-const saved = loadSaved();
-if (saved) {
-  $('btnContinue').hidden = false;
-  $('btnContinue').textContent = `Continue ${saved.name || 'saved city'}`;
-  $('btnContinue').addEventListener('click', () => {
-    try { begin(() => loadCity(saved)); } catch (e) { console.error(e); toast('That save could not be loaded.', 'bad'); }
-  });
+// ---------- cities menu ----------
+const TOWN_NAMES = ['Riverton', 'Maple Falls', 'Ashford', 'Clearwater', 'Bramley', 'Oakhaven', 'Linden', 'Fairport', 'Stonebridge', 'Elmsworth', 'Kestrel Bay', 'Hollins'];
+function freshName() {
+  const used = new Set(readIndex().map(c => c.name));
+  return TOWN_NAMES.find(n => !used.has(n)) || `New Town ${readIndex().length + 1}`;
 }
-window.addEventListener('pagehide', () => { if (G && state === 'play') save(); });
-document.addEventListener('visibilitychange', () => { if (document.hidden && G && state === 'play') save(); });
+function startNewCity(name) {
+  if (G && state === 'play') save(false);
+  begin(() => { foundCity((Math.random() * 1e9) | 0); G.name = (name || '').trim() || freshName(); G.slot = null; });
+  save(false);
+}
+function openSlot(id) {
+  const d = loadSlot(id);
+  if (!d) { toast('That city could not be found in this browser.', 'bad'); deleteSlot(id); renderCities(); return; }
+  if (G && state === 'play' && G.slot !== id) save(false);
+  try { begin(() => loadCity(d)); G.slot = id; } catch (e) { console.error(e); toast('That city could not be loaded.', 'bad'); }
+}
+const ago = t => { const m = Math.round((Date.now() - t) / 60000); return m < 1 ? 'just now' : m < 60 ? `${m} min ago` : m < 1440 ? `${Math.round(m / 60)} h ago` : `${Math.round(m / 1440)} d ago`; };
+function renderCities() {
+  const list = readIndex();
+  for (const box of [$('introCities'), $('menuCities')]) {
+    box.innerHTML = '';
+    if (!list.length) { box.innerHTML = '<p class="empty">No saved cities yet. Cities save automatically while you play.</p>'; continue; }
+    for (const c of list) {
+      const row = document.createElement('div');
+      row.className = 'cityrow' + (G && state === 'play' && G.slot === c.id ? ' current' : '');
+      const yr = `${MONTHS[c.month % 12]} ${2026 + Math.floor(c.month / 12)}`;
+      row.innerHTML = `<div class="ci"><b></b><small>${fmt(c.pop)} residents · ${yr} · saved ${ago(c.savedAt)}</small></div>
+        <div class="ca"><button class="btn sm primary" data-act="open">${G && state === 'play' && G.slot === c.id ? 'Playing' : 'Open'}</button><button class="btn sm" data-act="del" aria-label="Delete ${c.name}">Delete</button></div>`;
+      row.querySelector('b').textContent = c.name;
+      const openB = row.querySelector('[data-act="open"]'), delB = row.querySelector('[data-act="del"]');
+      openB.disabled = G && state === 'play' && G.slot === c.id;
+      openB.addEventListener('click', () => { $('cities').hidden = true; openSlot(c.id); });
+      delB.addEventListener('click', () => {
+        if (delB.dataset.confirm) { deleteSlot(c.id); renderCities(); return; }
+        delB.dataset.confirm = '1'; delB.textContent = 'Delete for good?'; delB.classList.add('danger');
+        setTimeout(() => { if (delB.isConnected) { delete delB.dataset.confirm; delB.textContent = 'Delete'; delB.classList.remove('danger'); } }, 3500);
+      });
+      box.appendChild(row);
+    }
+  }
+}
+function openCitiesMenu() {
+  if (state !== 'play') return;
+  save(false);
+  $('newName').value = freshName();
+  renderCities();
+  $('cities').hidden = false;
+}
+$('btnNew').addEventListener('click', () => startNewCity($('introName').value));
+$('btnCities').addEventListener('click', openCitiesMenu);
+$('btnSaveNow').addEventListener('click', () => { save(true); renderCities(); });
+$('btnNewCity').addEventListener('click', () => { $('cities').hidden = true; startNewCity($('newName').value); });
+$('btnCloseCities').addEventListener('click', () => { $('cities').hidden = true; });
+$('cities').addEventListener('click', e => { if (e.target === $('cities')) $('cities').hidden = true; });
+window.addEventListener('keydown', e => {
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); save(true); }
+  if (e.key === 'Escape' && !$('cities').hidden) $('cities').hidden = true;
+});
+migrateLegacy();
+$('introName').value = freshName();
+window.addEventListener('pagehide', () => save(false));
+document.addEventListener('visibilitychange', () => { if (document.hidden) save(false); });
 
 // a demo town behind the intro card
 function demoCity() {
@@ -3635,6 +3760,7 @@ function demoCity() {
 resize();
 window.addEventListener('resize', resize);
 demoCity();
+renderCities();
 cam.x = 450; cam.y = G.hy; cam.z = clamp(Math.min(innerWidth, innerHeight * 1.5) / 560, 0.8, 2.4);
 setTool('road'); setShape('straight'); setBrush(1); setDoze(1); setZoneType('res'); syncDesign(); syncLocks();
 

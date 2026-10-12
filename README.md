@@ -54,7 +54,7 @@ lay themselves out, and every resident's commute has to get through the network 
   - Long commutes lower demand, cut tax income and eventually make residents abandon their homes.
   - The Traffic view shows jams, and red badges mark unhappy homes.
 
-Your city saves automatically in your browser. Dark mode turns the map to night, with lit windows,
+Keep as many cities as you like. The **Cities** button in the top bar saves the current city (or press Ctrl+S), starts a new one, and opens or deletes saved ones. Cities also save automatically while you play and appear on the start screen. They're stored in your browser. Dark mode turns the map to night, with lit windows,
 headlights and glowing park lamps.
 
 ## Controls
