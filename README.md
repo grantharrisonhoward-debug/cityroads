@@ -9,8 +9,14 @@ lay themselves out, and every resident's commute has to get through the network 
 
 ## How it plays
 
-- **Free-form roads.** Draw straight, curved (start, bend, end) or freehand roads anywhere.
-  Roads at the same level join into junctions automatically.
+- **Free-form roads.** Click to start a road and click again to end it. It keeps going from the end
+  until you press Esc or right-click. Dragging works too, and so do curves (start, bend, end) and
+  freehand. Roads at the same level join into junctions automatically.
+- **Grid tool.** Click a corner, click along one side, then click across. The tool fills the area
+  with a street grid at your chosen block size, in any orientation.
+- **Region connections.** Named connection points sit around the map edge. The western highway
+  starts connected. Linking more of them brings extra jobs for commuters, plus through traffic that
+  crosses your city.
 - **Road designer.** Start from a preset (Street, One-way, Avenue, Boulevard, Freeway, Ramp), then
   fine-tune it:
   - Lanes ahead and back (0 back makes a one-way).
@@ -28,6 +34,10 @@ lay themselves out, and every resident's commute has to get through the network 
   - At a yield junction, cars stop and only one direction moves at a time.
   - Traffic lights cycle between approaches (unlock at 60 residents).
   - Roundabouts keep several cars moving at once (unlock at 150).
+- **Parking and strip malls.** Paint Parking to lay out stalls aligned with the nearest road. Cars
+  come and go with how busy nearby shops are, and shops near parking earn more and grow faster.
+  Commercial zones claim long stretches of frontage and grow into strip malls sized to fit: front
+  parking, a row of shop units with awnings, a pylon sign and, as they grow, an anchor store.
 - **Paint, don't place.** Brush homes, shops, industry and parks onto the land, or fill a whole area
   enclosed by roads. Zoning is free.
   - Lots fit themselves along every road inside the painted shape, rotated to face the street.
@@ -55,7 +65,7 @@ headlights and glowing park lamps.
 | Scroll / pinch | Zoom |
 | Right-drag, Space-drag, two fingers, WASD | Pan |
 | `1`–`5` | Inspect, Roads, Junctions, Zoning, Bulldoze |
-| `Z` / `X` / `C` | Straight, curve or freehand road |
+| `Z` / `X` / `C` / `V` | Straight, curve, freehand or grid |
 | Shift | Snap road angles to 15° |
 | Space (tap) | Pause |
 | Esc | Cancel the current road |

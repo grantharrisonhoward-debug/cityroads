@@ -223,9 +223,11 @@ body { background: var(--bg); color: var(--ink); font-family: var(--f-body); fon
       <button data-elev="1" title="Bridge: passes over ground roads">Bridge</button>
       <button data-elev="2" title="High bridge: passes over bridges too">High</button>
       <span class="gap"></span>
-      <button data-shape="straight" title="Drag from start to end (Z). Hold Shift to snap angles.">Straight</button>
+      <button data-shape="straight" title="Click the start, then click the end, and keep going; Esc or right-click stops. You can also drag. (Z) Shift snaps angles.">Straight</button>
       <button data-shape="curve" title="Set the start, then the bend, then the end (X)">Curve</button>
       <button data-shape="free" title="Draw freely (C)">Freehand</button>
+      <button data-shape="grid" title="Click a corner, then along one side, then across (V)">Grid</button>
+      <button id="gridSize" hidden title="Block size">Blocks 64 m</button>
       <span class="gap"></span>
       <button data-rmode="build">Build</button>
       <button data-rmode="upgrade" title="Click an existing road to rebuild it with this design">Upgrade</button>
@@ -237,6 +239,7 @@ body { background: var(--bg); color: var(--ink); font-family: var(--f-body); fon
       <button data-zone="com"><i class="sw" style="background:var(--com)"></i>Shops</button>
       <button data-zone="ind"><i class="sw" style="background:var(--ind)"></i>Industry</button>
       <button data-zone="park"><i class="sw" style="background:var(--park)"></i>Park</button>
+      <button data-zone="parking"><i class="sw" style="background:#8f939b"></i>Parking</button>
       <button data-zone="none">Unzone</button>
       <span class="gap"></span>
       <button data-brush="0">S</button>
@@ -291,7 +294,7 @@ body { background: var(--bg); color: var(--ink); font-family: var(--f-body); fon
     <h1><span class="mark" aria-hidden="true"></span>City Roads</h1>
     <p>A highway brings you into an empty valley. Draw streets wherever you like, paint where people should live, shop and work, and keep everyone moving. Neighbourhoods fill in by themselves. Jammed roads make people unhappy, and unhappy people leave.</p>
     <dl class="how">
-      <dt>Roads</dt><dd>Draw straight, curved or freehand roads. Design each one: lanes in each direction, median, speed limit and driveways, or start from a preset like Freeway.</dd>
+      <dt>Roads</dt><dd>Click to start a road and click again to end it; it keeps going until Esc. Curves, freehand and a three-click Grid tool are there too. Design each one: lanes in each direction, median, speed limit and driveways, or start from a preset like Freeway.</dd>
       <dt>Levels</dt><dd>Build tunnels, bridges and high bridges. Roads only meet at junctions on the same level, and ramps form where levels change.</dd>
       <dt>Zoning</dt><dd>Paint homes, shops, industry and parks for free. Buildings fit themselves along the roads inside the painted area. Zone colours show only in the Zoning menu or the Zones view.</dd>
       <dt>Junctions</dt><dd>Every junction is a bottleneck. Upgrade busy ones to traffic lights or roundabouts, or route traffic around them.</dd>
@@ -313,7 +316,7 @@ body { background: var(--bg); color: var(--ink); font-family: var(--f-body); fon
 // constants
 // =====================================================================
 const WW = 2000, WH = 1400, CELL = 10, CW = WW / CELL, CH = WH / CELL, NC = CW * CH;
-const ZR = 2, ZC = 3, ZI = 4, ZP = 5;
+const ZR = 2, ZC = 3, ZI = 4, ZP = 5, ZK = 6;
 // Roads are described by a spec: lanes each way, median, speed limit and whether buildings may front onto it.
 const LANE_W = 4.5;
 const MEDIANS = { none: { name: 'None', w: 0, cost: 0 }, paint: { name: 'Painted', w: 1.2, cost: 0.3 }, grass: { name: 'Grass', w: 6, cost: 1.5 }, barrier: { name: 'Barrier', w: 1.6, cost: 1.5 } };
@@ -353,7 +356,7 @@ const JUNC = {
 };
 const MONTH_LEN = 10, OUTSIDE_JOBS = 60, CAR_LEN = 5, TRUCK_LEN = 8.5, MAX_CARS = 520;
 const MILESTONES = [100, 250, 500, 1000, 2000, 4000, 8000, 15000];
-const SAVE_KEY = 'cityroads-v4';
+const SAVE_KEY = 'cityroads-v5';
 const LIGHT = (() => { const l = Math.hypot(-0.55, -0.83); return { x: -0.55 / l, y: -0.83 / l }; })();
 const SHX = 0.42, SHY = 0.58;
 const BRUSH = [14, 30, 58], DOZE = [10, 22, 44];
@@ -395,7 +398,7 @@ const PAL = {
     shadow: 'rgba(28,44,30,0.22)', treeHi: 'rgba(255,255,255,0.17)',
     road: '#4c515c', roadEdge: '#c9ccbe', mark: 'rgba(255,255,255,0.8)', yellow: '#f0b429', deck: '#8f8a7c', hwShadow: 'rgba(20,30,20,0.25)',
     zone: { 2: '#86c98a', 3: '#b0a8ee', 4: '#eec27a' }, zoneEdge: { 2: '#4fae64', 3: '#6f63d9', 4: '#e09a2e' },
-    grass: '#a3cf8a', hedge: '#86bb70', path: '#efe4c4', pathEdge: '#d6c79e', island: '#8cc475',
+    grass: '#a3cf8a', hedge: '#86bb70', lotTop: '#8f939b', curb: '#cfd1c6', path: '#efe4c4', pathEdge: '#d6c79e', island: '#8cc475',
     yard: { 2: '#bfe0ae', 3: '#d9dcd6', 4: '#d8d1c1' }, drive: '#c9c6bb', pave: '#cfd2cc',
     roofR: ['#d6705a', '#c05a4c', '#8e6f9f', '#5f80a0', '#d09850', '#7d9a6a', '#b6634f', '#6d7f8f'],
     flat: ['#d9d6cf', '#cfcac0', '#e2ddd3', '#c9ccc6'], roofC: ['#a8c7e3', '#e4ebf0', '#c8d5de', '#d9e4ec'],
@@ -413,7 +416,7 @@ const PAL = {
     shadow: 'rgba(0,0,0,0.35)', treeHi: 'rgba(255,255,255,0.05)',
     road: '#2b2f37', roadEdge: '#454a45', mark: 'rgba(255,240,200,0.45)', yellow: '#c99a2c', deck: '#4a4740', hwShadow: 'rgba(0,0,0,0.4)',
     zone: { 2: '#2f5a37', 3: '#463f78', 4: '#6a5530' }, zoneEdge: { 2: '#62c277', 3: '#9a90f0', 4: '#efad48' },
-    grass: '#2c4a2f', hedge: '#24402a', path: '#5b5543', pathEdge: '#4a4535', island: '#2f5232',
+    grass: '#2c4a2f', hedge: '#24402a', lotTop: '#30343b', curb: '#454a45', path: '#5b5543', pathEdge: '#4a4535', island: '#2f5232',
     yard: { 2: '#283a29', 3: '#30353a', 4: '#3a362f' }, drive: '#3a3c3d', pave: '#34383b',
     roofR: [], flat: [], roofC: [], roofI: [], awning: ['#a63a42', '#2f5f97', '#b0842a', '#257a57'],
     glass: '#2d4a66', pool: '#1f5a70', tank: '#4b4842',
@@ -473,7 +476,7 @@ function newCity(seed) {
     pop: 0, jc: 0, ji: 0, demand: { r: 1, c: 0, i: 0.5 }, flow: 100, commute: 1, speed: 1,
     nodes: new Map(), edges: new Map(), lots: new Map(), nextId: 1, cars: [],
     zone: new Uint8Array(NC), zoneT: new Float32Array(NC).fill(-99), trees: [], river: [], lakes: [],
-    tripAcc: 0, truckAcc: 0, growAcc: 0, lvAcc: 99, outside: 0, hy: 0, ver: 0, unlocked: {},
+    tripAcc: 0, truckAcc: 0, thruAcc: 0, growAcc: 0, lvAcc: 99, outs: [], hy: 0, ver: 0, unlocked: {},
   };
 }
 
@@ -659,7 +662,7 @@ function removeEdge(e, keepNodes) {
     const n = G.nodes.get(nid);
     if (!n) continue;
     n.edges = n.edges.filter(x => x !== e.id);
-    if (!keepNodes && !n.edges.length && nid !== G.outside) G.nodes.delete(nid);
+    if (!keepNodes && !n.edges.length && !isOut(nid)) G.nodes.delete(nid);
   }
 }
 function computeNodes() {
@@ -866,7 +869,7 @@ function buildRoad(raw, spec, snapA, snapB, free) {
     const e = addEdge(ids[k], ids[k + 1], sp, spec, clock + (pos[k] / Math.max(1, L)) * 0.35);
     if (e) made.push(e);
   }
-  for (const n of [...G.nodes.values()]) if (!n.edges.length && n.id !== G.outside) G.nodes.delete(n.id);
+  for (const n of [...G.nodes.values()]) if (!n.edges.length && !isOut(n.id)) G.nodes.delete(n.id);
   rebuildRoadIndex();
   afterRoadChange(made, nbb);
   sfx('road');
@@ -1026,17 +1029,23 @@ function genLotsAlong(e) {
       const z = zoneAt(p.x + p.nx * side * (hw + 5), p.y + p.ny * side * (hw + 5));
       if (z < ZR || z > ZI) { s += 5; continue; }
       const cfg = LOTCFG[z], h = hash(Math.round(p.x), Math.round(p.y), G.seed + z);
-      const w = cfg.w[0] + h * (cfg.w[1] - cfg.w[0]);
-      if (s + w > s1) break;
-      let placed = false;
-      const m = pointAt(e, s + w / 2);
-      const xa = { x: m.tx, y: m.ty }, ya = { x: m.nx * side, y: m.ny * side };
-      for (const d of cfg.d) {
-        const off = hw + 2.2 + d / 2;
-        const l = { x: m.x + ya.x * off, y: m.y + ya.y * off, xa, ya, w, d, z };
-        if (lotFits(l)) { addLot(l); placed = true; break; }
+      // shops try the longest frontage that fits so they can become strip malls
+      const widths = z === ZC
+        ? [Math.min(96, s1 - s), Math.min(70, s1 - s), Math.min(48, s1 - s), 30, cfg.w[0] + h * (cfg.w[1] - cfg.w[0])].filter((v, i, a) => v >= 17 && v <= s1 - s && a.indexOf(v) === i)
+        : [cfg.w[0] + h * (cfg.w[1] - cfg.w[0])];
+      let placed = 0;
+      outer: for (const w of widths) {
+        if (s + w > s1) continue;
+        const m = pointAt(e, s + w / 2);
+        const xa = { x: m.tx, y: m.ty }, ya = { x: m.nx * side, y: m.ny * side };
+        for (const d of cfg.d) {
+          const off = hw + 2.2 + d / 2;
+          const l = { x: m.x + ya.x * off, y: m.y + ya.y * off, xa, ya, w, d, z };
+          if (lotFits(l)) { addLot(l); placed = w; break outer; }
+        }
       }
-      s += placed ? w + 0.6 + h * 1.5 : 3;
+      if (!placed && widths.every(w => s + w > s1)) break;
+      s += placed ? placed + 0.6 + h * 1.5 : 3;
     }
   }
 }
@@ -1052,12 +1061,12 @@ function validateLotsIn(x0, y0, x1, y1) {
 
 // ---------- procedural buildings ----------
 const RES_CAP = l => l.b.level === 1 ? 4 : l.b.level === 2 ? 7 : l.b.level === 3 ? (l.b.units || 3) * 3 : Math.round(l.w * l.d / 14);
-const COM_JOBS = l => [0, 4, 9, 18, Math.round(l.w * l.d / 8)][l.b.level];
+const COM_JOBS = l => l.b.jobs || [0, 4, 9, 18, Math.round(l.w * l.d / 8)][l.b.level];
 const IND_JOBS = l => [0, 8, 18, 38][l.b.level];
 const LVTH = { 2: [0, 0, 34, 48, 62], 3: [0, 0, 36, 50, 66], 4: [0, 0, 24, 40] };
 function maxLevel(l) {
   if (l.z === ZR) return l.w >= 16 && l.d >= 18 ? 4 : l.w >= 14 ? 3 : 2;
-  if (l.z === ZC) return l.w >= 20 && l.d >= 20 ? 4 : 3;
+  if (l.z === ZC) return l.w >= 26 ? (l.w * l.d >= 1400 ? 4 : 3) : l.w >= 20 && l.d >= 20 ? 4 : 3;
   return l.w >= 28 && l.d >= 28 ? 3 : 2;
 }
 
@@ -1112,6 +1121,34 @@ function makeBuilding(l, level) {
       tree(-w / 2 + 2.5, d / 2 - 2.5, 2.4); tree(w / 2 - 2.5, d / 2 - 2.5, 2.2);
       if (d / 2 - (by + bd / 2) > 5) parts.push({ t: 'stalls', x: 0, y: (by + bd / 2 + d / 2) / 2, w: w - 8, h: d / 2 - (by + bd / 2) - 1.5 });
     }
+  } else if (l.z === ZC && w >= 26 && !(level === 4 && w * d >= 1400 && r() < 0.6)) {
+    // strip mall: parking along the road, a row of shop units behind it, an anchor store once it grows
+    yard('pave');
+    const pd = clamp(d * 0.48, 9, 22), by0 = fy + pd + 1.2;
+    const bd = Math.max(6, Math.min(d / 2 - 1.2 - by0, 14 + level * 2)), byc = by0 + bd / 2;
+    parts.push({ t: 'lot', x: 0, y: fy + 0.4 + pd / 2, w: w - 1.6, h: pd - 0.4 });
+    let x = -w / 2 + 1.4, xEnd = w / 2 - 1.4;
+    if (level >= 3 && w >= 44) {
+      const aw = w * (0.32 + r() * 0.08), H = 9 + level, left = r() < 0.5;
+      const ax = left ? x + aw / 2 : xEnd - aw / 2;
+      box(ax, byc + 0.5, aw, bd + 1, H, 'flat', pr(DAY.flat), 0);
+      parts.push({ t: 'awn', x: ax, y: by0 - 0.4, w: aw * 0.5, h: 1.6, c: (r() * 4) | 0, d: 0.2 });
+      if (left) x += aw + 0.8; else xEnd -= aw + 0.8;
+    }
+    const n = Math.max(1, Math.floor((xEnd - x) / (6.5 + r() * 2.5))), uw = (xEnd - x) / n;
+    const base = pr(DAY.roofC);
+    for (let k = 0; k < n; k++) {
+      const ux = x + uw * (k + 0.5);
+      box(ux, byc, uw - 0.25, bd, 5.5 + level * 0.8, 'flat', r() < 0.6 ? base : pr(DAY.roofC), 0.05 * k);
+      parts.push({ t: 'awn', x: ux, y: by0 - 0.9, w: uw * 0.86, h: 1.8, c: (r() * 4) | 0, d: 0.1 + 0.05 * k });
+    }
+    // parked cars, busier as the mall grows
+    const rows = pd >= 14 ? [fy + 0.4 + 2.9, by0 - 3.1] : [by0 - 3.1];
+    for (const ry of rows) for (let px = -w / 2 + 3; px < w / 2 - 2; px += 3) if (r() < 0.18 + level * 0.12) parts.push({ t: 'pcar', x: px, y: ry, a: Math.PI / 2, c: (r() * 8) | 0, d: 0.5 + r() * 0.4 });
+    for (let tx = -w / 2 + 3; tx < w / 2 - 2; tx += 13 + r() * 5) if (r() < 0.7) tree(tx, fy + 1.1, 1.5 + r() * 0.5);
+    parts.push({ t: 'sign', x: (r() < 0.5 ? -1 : 1) * (w / 2 - 3), y: fy + 1.6, c: (r() * 4) | 0, d: 0.4 });
+    b.units = n;
+    b.jobs = Math.round(w * d / 45 * (0.6 + 0.3 * level));
   } else if (l.z === ZC) {
     yard('c');
     if (level <= 2) {
@@ -1161,8 +1198,22 @@ function makeBuilding(l, level) {
 // =====================================================================
 const D4 = [[1, 0], [-1, 0], [0, 1], [0, -1]];
 function regenParks() {
-  parks = [];
+  parks = []; lotsK = [];
   const seen = new Uint8Array(NC), s = G.seed;
+  for (let c0 = 0; c0 < NC; c0++) {
+    if (seen[c0] || G.zone[c0] !== ZK || roadMask[c0]) continue;
+    const cells = [c0]; seen[c0] = 1;
+    for (let h = 0; h < cells.length; h++) {
+      const c = cells[h], cx = c % CW, cy = (c / CW) | 0;
+      for (const [dx, dy] of D4) {
+        const x = cx + dx, y = cy + dy;
+        if (x < 0 || y < 0 || x >= CW || y >= CH) continue;
+        const j = y * CW + x;
+        if (!seen[j] && G.zone[j] === ZK && !roadMask[j]) { seen[j] = 1; cells.push(j); }
+      }
+    }
+    lotsK.push(genParking(cells, s));
+  }
   for (let c0 = 0; c0 < NC; c0++) {
     if (seen[c0] || G.zone[c0] !== ZP || roadMask[c0]) continue;
     const cells = [c0]; seen[c0] = 1;
@@ -1177,6 +1228,35 @@ function regenParks() {
     }
     parks.push(genPark(cells, s));
   }
+}
+// parking lots: rows of stalls aligned with the nearest road, clipped to the painted shape
+let lotsK = [];
+function genParking(cells, s) {
+  let cx = 0, cy = 0;
+  for (const c of cells) { cx += (c % CW) * CELL + 5; cy += ((c / CW) | 0) * CELL + 5; }
+  cx /= cells.length; cy /= cells.length;
+  const h = nearestRoad(cx, cy, 400, (e, i) => Math.abs(e.pts[i].z) < 0.3);
+  const f = h ? pointAt(h.e, h.s) : { tx: 1, ty: 0 };
+  const ux = f.tx, uy = f.ty, vx = -uy, vy = ux;
+  let u0 = 1e9, u1 = -1e9, v0 = 1e9, v1 = -1e9;
+  for (const c of cells) {
+    const x = (c % CW) * CELL + 5 - cx, y = ((c / CW) | 0) * CELL + 5 - cy, u = x * ux + y * uy, v = x * vx + y * vy;
+    u0 = Math.min(u0, u); u1 = Math.max(u1, u); v0 = Math.min(v0, v); v1 = Math.max(v1, v);
+  }
+  const ok = (x, y) => { const c = cellOf(x, y); return c >= 0 && G.zone[c] === ZK && !roadMask[c]; };
+  const stalls = [];
+  const SW = 2.9, SD = 5.4, AISLE = 6.4, PER = SD * 2 + AISLE;
+  for (let v = v0 - 5; v < v1 + 5; v += PER) for (const row of [0, 1]) {
+    const vc = v + (row ? SD + AISLE + SD / 2 : SD / 2);
+    for (let u = u0 - 5; u < u1 + 5; u += SW) {
+      const x = cx + ux * u + vx * vc, y = cy + uy * u + vy * vc;
+      if (!ok(x, y) || !ok(x + ux * SW / 2 + vx * SD / 2, y + uy * SW / 2 + vy * SD / 2) || !ok(x - ux * SW / 2 - vx * SD / 2, y - uy * SW / 2 - vy * SD / 2)) continue;
+      if (!ok(x + vx * (row ? -1 : 1) * (SD / 2 + 3), y + vy * (row ? -1 : 1) * (SD / 2 + 3))) continue; // needs an aisle in front
+      const cc = cellOf(x, y);
+      stalls.push({ x, y, row, h: hash(Math.round(x * 3), Math.round(y * 3), s + 61), t0: G.zoneT[cc] + 0.2 + hash(Math.round(x), Math.round(y), s) * 0.3 });
+    }
+  }
+  return { ux, uy, vx, vy, stalls, cells: cells.length, cx, cy, SW, SD };
 }
 function genPark(cells, s) {
   const inR = new Set(cells), size = cells.length;
@@ -1297,9 +1377,9 @@ function bakeGround() {
 }
 function bakeCellPass(c, pass) {
   const z = G.zone[c], x = (c % CW) * 4 + 2, y = ((c / CW) | 0) * 4 + 2;
-  const cx = z === ZP ? pctx : zctx;
-  cx.fillStyle = pass ? (z === ZP ? P.grass : P.zone[z]) : (z === ZP ? P.hedge : P.zoneEdge[z]);
-  cx.beginPath(); cx.arc(x, y, pass ? (z === ZP ? 3.0 : 2.9) : 3.6, 0, 7); cx.fill();
+  const real = z >= ZP, cx = real ? pctx : zctx;
+  cx.fillStyle = pass ? (z === ZP ? P.grass : z === ZK ? P.lotTop : P.zone[z]) : (z === ZP ? P.hedge : z === ZK ? P.curb : P.zoneEdge[z]);
+  cx.beginPath(); cx.arc(x, y, pass ? (real ? 3.0 : 2.9) : 3.6, 0, 7); cx.fill();
 }
 function bakeCell(c) { if (G.zone[c]) { bakeCellPass(c, 0); bakeCellPass(c, 1); } }
 function bakeZones() {
@@ -1316,7 +1396,7 @@ function paintCircle(x, y, r, z) {
     const c = cy * CW + cx, px = cx * CELL + 5, py = cy * CELL + 5, d = dist(px, py, x, y);
     if (d > r || water[c] || G.zone[c] === z) continue;
     if (G.zone[c]) erased = true;
-    if (G.zone[c] === ZP || z === ZP) parksDirty = true;
+    if (G.zone[c] >= ZP || z >= ZP) parksDirty = true;
     G.zone[c] = z;
     if (z) {
       G.zoneT[c] = clock + d / r * 0.3;
@@ -1324,7 +1404,7 @@ function paintCircle(x, y, r, z) {
     }
     n++;
   }
-  if (z === ZP && n) fellTrees((tx, ty) => zoneAt(tx, ty) === ZP, x - r, y - r, x + r, y + r);
+  if (z >= ZP && n) fellTrees((tx, ty) => zoneAt(tx, ty) === z, x - r, y - r, x + r, y + r);
   if (erased) bakeTimer = 0;
   if (n) markZoneChange(x - r, y - r, x + r, y + r);
   return n;
@@ -1340,7 +1420,7 @@ function flushZoneChanges() {
   zoneDirtyBB = null;
   validateLotsIn(x0 - 30, y0 - 30, x1 + 30, y1 + 30);
   genLotsIn(x0 - 50, y0 - 50, x1 + 50, y1 + 50);
-  for (let k = 0; k < 4 && autoLane(x0 - 40, y0 - 40, x1 + 40, y1 + 40); k++);
+  for (let k = 0; k < 2 && autoLane(x0 - 40, y0 - 40, x1 + 40, y1 + 40); k++);
   changed();
 }
 // Lay a small access lane into painted land that no road reaches yet, so whole areas fill in.
@@ -1352,7 +1432,7 @@ function autoLane(x0, y0, x1, y1) {
     const c = cy * CW + cx, z = G.zone[c];
     if (z < ZR || z > ZI || roadMask[c] || water[c]) continue;
     const x = cx * CELL + 5, y = cy * CELL + 5;
-    if (nearestRoad(x, y, 34)) continue;
+    if (nearestRoad(x, y, 48)) continue;
     let covered = false;
     forLotsIn(x - 1, y - 1, x + 1, y + 1, l => { if (!covered && pointInLot(l, x, y, 2)) covered = true; });
     if (!covered) open.add(c);
@@ -1366,7 +1446,7 @@ function autoLane(x0, y0, x1, y1) {
       const c = cl[h], cx = c % CW, cy = (c / CW) | 0;
       for (const [dx, dy] of D4) { const j = (cy + dy) * CW + cx + dx; if (open.has(j) && !seen.has(j)) { seen.add(j); cl.push(j); } }
     }
-    if (cl.length >= 22 && (!best || cl.length > best.length)) best = cl;
+    if (cl.length >= 40 && (!best || cl.length > best.length)) best = cl;
   }
   if (!best) return false;
   let mx = 0, my = 0;
@@ -1428,13 +1508,13 @@ function fillCells(cells, z, ox, oy) {
   let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
   for (const c of cells) {
     const px = (c % CW) * CELL + 5, py = ((c / CW) | 0) * CELL + 5;
-    if (G.zone[c] === ZP || z === ZP) parksDirty = true;
+    if (G.zone[c] >= ZP || z >= ZP) parksDirty = true;
     G.zone[c] = z;
     G.zoneT[c] = clock + dist(px, py, ox, oy) * 0.0025;
     if (!animFlag[c]) { animFlag[c] = 1; animCells.push(c); }
     x0 = Math.min(x0, px); y0 = Math.min(y0, py); x1 = Math.max(x1, px); y1 = Math.max(y1, py);
   }
-  if (z === ZP) fellTrees((tx, ty) => zoneAt(tx, ty) === ZP, x0, y0, x1, y1);
+  if (z >= ZP) fellTrees((tx, ty) => zoneAt(tx, ty) === z, x0, y0, x1, y1);
   bakeTimer = 0;
   markZoneChange(x0, y0, x1, y1);
   flushZoneChanges();
@@ -1484,16 +1564,21 @@ function census() {
     const b = l.b;
     if (!b || b.abandoned) continue;
     if (l.z === ZR) { const n = RES_CAP(l); pop += n; homes.push({ l, w: n }); }
-    else if (l.z === ZC) { const n = COM_JOBS(l); jc += n; jobs.push({ l, w: n }); shops.push({ l, w: n }); }
+    else if (l.z === ZC) { const n = Math.round(COM_JOBS(l) * (1 + Math.min(0.4, parkAt(l.x, l.y) * 0.04))); jc += n; jobs.push({ l, w: n }); shops.push({ l, w: n }); }
     else { const n = IND_JOBS(l); ji += n; jobs.push({ l, w: n }); fac.push({ l, w: n }); }
   }
   G.pop = pop; G.jc = jc; G.ji = ji;
   lists.homes = weighted(homes); lists.jobs = weighted(jobs); lists.shops = weighted(shops); lists.factories = weighted(fac);
   const work = jc + ji;
   const jam = clamp((G.commute - 1.5) * 0.8, 0, 1.3);
-  G.demand.r = clamp(clamp((work + OUTSIDE_JOBS - pop * 0.5) / Math.max(30, pop * 0.25), -1, 1) - jam, -1, 1);
+  G.demand.r = clamp(clamp((work + outJobs() - pop * 0.5) / Math.max(30, pop * 0.25), -1, 1) - jam, -1, 1);
   G.demand.c = clamp(clamp((pop * 0.16 - jc + 4) / Math.max(12, pop * 0.07), -1, 1) - jam * 0.5, -1, 1);
   G.demand.i = clamp(clamp((pop * 0.22 - ji + 12) / Math.max(15, pop * 0.1), -1, 1) - jam * 0.3, -1, 1);
+}
+let parkGrid = null;
+function parkAt(x, y) {
+  if (!parkGrid) return 0;
+  return parkGrid[clamp(Math.floor(y / LVC), 0, LH - 1) * LW + clamp(Math.floor(x / LVC), 0, LW - 1)];
 }
 function lvAt(x, y) {
   if (!lvGrid) return 30;
@@ -1515,6 +1600,13 @@ function computeLV() {
   for (let c = 0; c < NC; c++) {
     if (G.zone[c] === ZP && (c % 2 === 0)) splat(park, (c % CW) * CELL, ((c / CW) | 0) * CELL, 3, 0.55);
     if (water[c] && c % 3 === 0) splat(wat, (c % CW) * CELL, ((c / CW) | 0) * CELL, 2, 0.3);
+  }
+  parkGrid = new Float32Array(LW * LH);
+  for (const k of lotsK) {
+    splat(parkGrid, k.cx, k.cy, 3, k.stalls.length * 0.08);
+    let jobs = 0;
+    forLotsIn(k.cx - 150, k.cy - 150, k.cx + 150, k.cy + 150, l => { if (l.z === ZC && l.b && !l.b.abandoned) jobs += COM_JOBS(l); });
+    k.occ = clamp(0.12 + jobs / 140, 0.12, 0.92);
   }
   for (const l of G.lots.values()) {
     if (!l.b || l.b.abandoned) continue;
@@ -1578,7 +1670,7 @@ function growTick() {
       b.bad = sad ? b.bad + 0.4 : Math.max(0, b.bad - 0.8);
       if (b.bad > 30) { b.abandoned = true; b.abTime = G.time; toastOnce('abandon', 'People are leaving homes with terrible commutes. Check the Traffic view.', 'bad'); continue; }
     }
-    if (b.level < maxLevel(l) && d > 0.05 && lvAt(l.x, l.y) + (l.avenue ? 8 : 0) >= LVTH[l.z][b.level + 1] && b.happy < 2 && Math.random() < 0.03 + 0.08 * d) {
+    if (b.level < maxLevel(l) && d > 0.05 && lvAt(l.x, l.y) + (l.avenue ? 8 : 0) + (l.z === ZC ? Math.min(10, parkAt(l.x, l.y) * 0.6) : 0) >= LVTH[l.z][b.level + 1] && b.happy < 2 && Math.random() < 0.03 + 0.08 * d) {
       const old = b;
       l.b = makeBuilding(l, b.level + 1);
       l.b.happy = old.happy; l.b.upgrade = true;
@@ -1746,7 +1838,18 @@ function spawnCar(src, dst, home, truck) {
   G.cars.push(c);
   return true;
 }
-function outsideOK() { const n = G.nodes.get(G.outside); return !!(n && n.edges.length > 0); }
+// ---------- connections to the region ----------
+const isOut = nid => !!(G && G.outs.some(o => o.id === nid));
+const connectedOuts = () => G.outs.filter(o => { const n = G.nodes.get(o.id); return n && n.edges.length > 0; });
+const outJobs = () => OUTSIDE_JOBS * 0.5 + connectedOuts().length * 35;
+function outsideOK() { return connectedOuts().length > 0; }
+function pickOut(except) { const c = connectedOuts().filter(o => o.id !== except); return c.length ? c[(Math.random() * c.length) | 0].id : null; }
+function thruTrip() {
+  const a = pickOut(), b = a && pickOut(a);
+  if (!a || !b) return;
+  const res = spawnCar({ node: a }, { node: b }, null, Math.random() < 0.3);
+  if (res && G.cars.length) G.cars[G.cars.length - 1].thru = true;
+}
 function commuteTrip() {
   const h = pickW(lists.homes);
   if (!h) return;
@@ -1757,10 +1860,10 @@ function commuteTrip() {
   let dl = null;
   const local = G.jc + G.ji, out = outsideOK();
   if (Math.random() < 0.2 && lists.shops.total) dl = pickW(lists.shops).l;
-  else if (local && (!out || Math.random() < local / (local + OUTSIDE_JOBS))) dl = pickW(lists.jobs).l;
+  else if (local && (!out || Math.random() < local / (local + outJobs()))) dl = pickW(lists.jobs).l;
   if (dl && !dl.attach) return;
   if (!dl && !out) { b.noRoute = Math.min(10, b.noRoute + 1); return; }
-  const dst = dl ? { e: dl.attach.e, s: dl.attach.s } : { node: G.outside };
+  const dst = dl ? { e: dl.attach.e, s: dl.attach.s } : { node: pickOut() };
   const res = Math.random() < 0.5 ? spawnCar(home, dst, hl, false) : spawnCar(dst, home, hl, false);
   if (res === null) b.noRoute = Math.min(10, b.noRoute + 1);
   else if (res) b.noRoute = Math.max(0, b.noRoute - 1);
@@ -1771,7 +1874,7 @@ function truckTrip() {
   const src = { e: f.l.attach.e, s: f.l.attach.s };
   let dst = null;
   if (lists.shops.total && Math.random() < 0.5) { const s = pickW(lists.shops).l; if (s.attach) dst = { e: s.attach.e, s: s.attach.s }; }
-  if (!dst && outsideOK()) dst = { node: G.outside };
+  if (!dst && outsideOK()) dst = { node: pickOut() };
   if (dst) spawnCar(src, dst, null, true);
 }
 // detach a car from every structure that may hold it
@@ -1805,7 +1908,7 @@ function killCarsOn(set) {
 }
 function finishTrip(c, ratio) {
   if (c.home && c.home.b && !c.truck) c.home.b.happy = c.home.b.happy * 0.82 + ratio * 0.18;
-  if (!c.truck) G.commute = G.commute * 0.985 + ratio * 0.015;
+  if (!c.truck && !c.thru) G.commute = G.commute * 0.985 + ratio * 0.015;
 }
 
 function canEnter(n, c) {
@@ -1977,6 +2080,10 @@ function update(dt) {
   while (G.tripAcc >= 1) { G.tripAcc--; if (G.cars.length < MAX_CARS) commuteTrip(); }
   G.truckAcc += dt * Math.min(3, G.ji / 220);
   while (G.truckAcc >= 1) { G.truckAcc--; if (G.cars.length < MAX_CARS) truckTrip(); }
+  if (connectedOuts().length >= 2) {
+    G.thruAcc += dt * Math.min(3, 0.3 + G.month * 0.012 + G.pop / 2500);
+    while (G.thruAcc >= 1) { G.thruAcc--; if (G.cars.length < MAX_CARS) thruTrip(); }
+  }
   stepCars(dt);
   G.monthAcc += dt;
   if (G.monthAcc >= MONTH_LEN) { G.monthAcc -= MONTH_LEN; endOfMonth(); }
@@ -1994,7 +2101,7 @@ function serialize() {
   G.trees.forEach((t, i) => { alive[i] = t.alive ? 1 : 0; });
   return {
     v: 4, seed: G.seed, name: G.name, money: G.money, time: G.time, month: G.month, monthAcc: G.monthAcc, net: G.net, milestone: G.milestone,
-    unlocked: G.unlocked, outside: G.outside, nextId: G.nextId, commute: G.commute,
+    unlocked: G.unlocked, outs: G.outs, nextId: G.nextId, commute: G.commute,
     nodes: [...G.nodes.values()].map(n => [n.id, r1(n.x), r1(n.y), n.ctl, r1(n.z)]),
     edges: [...G.edges.values()].map(e => [e.id, e.a, e.b, e.spec, e.pts.flatMap(p => [r1(p.x), r1(p.y), Math.round(p.z * 100) / 100])]),
     lots: [...G.lots.values()].map(l => [r1(l.x), r1(l.y), l.xa.x, l.xa.y, l.ya.x, l.ya.y, r1(l.w), r1(l.d), l.z, l.b ? l.b.level : 0, l.b && l.b.abandoned ? 1 : 0]),
@@ -2017,9 +2124,17 @@ function foundCity(seed) {
   G = newCity(seed);
   genTerrain(G);
   initDerived();
-  const hy = G.hy;
-  const out = addNode(0, hy);
-  G.outside = out.id;
+  const hy = G.hy, rnd = mulberry(seed + 77);
+  const names = ['Westbrook', 'Northfield', 'Southgate', 'Eastport', 'Ridgeview', 'Millbrook', 'Harbor City', 'Pinecrest'];
+  // connection spots around the edge of the map; the western highway starts connected
+  const spots = [[0, hy], [WW * (0.22 + rnd() * 0.12), 0], [WW * (0.38 + rnd() * 0.12), WH], [WW, WH * (0.3 + rnd() * 0.2)], [WW * (0.8 + rnd() * 0.1), 0], [WW * (0.82 + rnd() * 0.1), WH]];
+  for (let k = 0; k < spots.length; k++) {
+    let [x, y] = spots[k];
+    for (let t = 0; t < 30 && waterNear(clamp(x, 5, WW - 5), clamp(y, 5, WH - 5), 30); t++) { if (y === 0 || y === WH) x += 25; else y += 25; }
+    const n = addNode(x, y);
+    G.outs.push({ id: n.id, name: names[k] });
+  }
+  const out = G.nodes.get(G.outs[0].id);
   const cy = hy + (hash(1, 1, seed) - 0.5) * 70, curve = [];
   for (let k = 0; k <= 20; k++) { const t = k / 20; curve.push({ x: lerp(lerp(0, 160, t), lerp(160, 320, t), t), y: lerp(lerp(hy, cy, t), lerp(cy, hy, t), t) }); }
   buildRoad(curve, { ...PRESETS.freeway, f: 2, b: 2 }, { node: out.id }, null, true);
@@ -2052,7 +2167,7 @@ function loadCity(d) {
     finalizeEdge(e); G.edges.set(id, e);
     G.nodes.get(a).edges.push(id); G.nodes.get(b).edges.push(id);
   }
-  G.outside = d.outside;
+  G.outs = d.outs || [];
   initDerived();
   for (const [x, y, ax, ay, bx, by, w, dd, z, level, ab] of d.lots) {
     const l = addLot({ x, y, xa: { x: ax, y: ay }, ya: { x: bx, y: by }, w, d: dd, z });
@@ -2191,15 +2306,13 @@ function drawRoads(layer) {
       ctx.fillStyle = P.roadEdge; ctx.beginPath(); ctx.arc(n.x, y, n.r - 7.5, 0, 7); ctx.fill();
       ctx.fillStyle = P.island; ctx.beginPath(); ctx.arc(n.x, y, n.r - 8.5, 0, 7); ctx.fill();
       ctx.fillStyle = P.tree[1]; ctx.beginPath(); ctx.arc(n.x - 2, y - 2, 4, 0, 7); ctx.arc(n.x + 3, y + 2, 3, 0, 7); ctx.fill();
-    } else {
-      ctx.fillStyle = P.road; ctx.beginPath(); ctx.arc(n.x, y, n.r + 0.5, 0, 7); ctx.fill();
     }
   }
-  // turning circles at dead ends
+  // turning circles at the ends of cul-de-sac lanes
   for (const n of G.nodes.values()) {
-    if (n.edges.length !== 1 || n.id === G.outside || zClass(n.z) !== layer || !inView(n.x, n.y, 20)) continue;
+    if (n.edges.length !== 1 || isOut(n.id) || zClass(n.z) !== layer || !inView(n.x, n.y, 20)) continue;
     const e = G.edges.get(n.edges[0]);
-    if (e.S.freeway || edgeProg(e) < 1) continue;
+    if (!e.S.auto || edgeProg(e) < 1) continue;
     const r = e.S.w * 0.85, y = n.y - lift(n.z);
     ctx.fillStyle = P.roadEdge; ctx.beginPath(); ctx.arc(n.x, y, r + 1.5, 0, 7); ctx.fill();
     ctx.fillStyle = P.road; ctx.beginPath(); ctx.arc(n.x, y, r, 0, 7); ctx.fill();
@@ -2393,6 +2506,12 @@ function drawLotsGround(lots) {
         const s = partScale(b, { d: 0.5 }, age);
         ctx.fillStyle = P.night ? '#5b5850' : '#f4f1ea'; ctx.beginPath(); rrect(p.x - p.w / 2 * s - 0.6, p.y - p.h / 2 * s - 0.6, p.w * s + 1.2, p.h * s + 1.2, 1.2); ctx.fill();
         ctx.fillStyle = P.pool; ctx.beginPath(); rrect(p.x - p.w / 2 * s, p.y - p.h / 2 * s, p.w * s, p.h * s, 1); ctx.fill();
+      } else if (p.t === 'lot') {
+        ctx.fillStyle = P.lotTop; ctx.beginPath(); rrect(p.x - p.w / 2, p.y - p.h / 2, p.w, p.h, 1.2); ctx.fill();
+        ctx.strokeStyle = P.mark; ctx.lineWidth = 0.25; ctx.beginPath();
+        const rows = p.h >= 13 ? [[p.y - p.h / 2 + 0.3, 5.2], [p.y + p.h / 2 - 5.5, 5.2]] : [[p.y + p.h / 2 - 5.5, 5.2]];
+        for (const [ry, rh] of rows) for (let x = p.x - p.w / 2 + 1.5; x <= p.x + p.w / 2 - 1; x += 3) { ctx.moveTo(x, ry); ctx.lineTo(x, ry + rh); }
+        ctx.stroke();
       } else if (p.t === 'stalls') {
         ctx.fillStyle = P.drive; ctx.fillRect(p.x - p.w / 2, p.y - p.h / 2, p.w, p.h);
         ctx.strokeStyle = P.mark; ctx.lineWidth = 0.25; ctx.beginPath();
@@ -2480,6 +2599,12 @@ function drawLotBodies(lots) {
         if (s <= 0.02) continue;
         ctx.fillStyle = bcol('#9c5a48'); ctx.beginPath(); ctx.arc(p.x, p.y, p.r * s, 0, 7); ctx.fill();
         ctx.fillStyle = '#3a3330'; ctx.beginPath(); ctx.arc(p.x, p.y, p.r * 0.55 * s, 0, 7); ctx.fill();
+      } else if (p.t === 'sign') {
+        const s = partScale(b, p, age);
+        if (s <= 0.02) continue;
+        ctx.fillStyle = '#5b5f66'; ctx.fillRect(p.x - 0.3, p.y - 0.3, 0.6, 0.6);
+        ctx.fillStyle = P.awning[p.c]; ctx.beginPath(); rrect(p.x - 2 * s, p.y - 2.2 * s, 4 * s, 1.6 * s, 0.4); ctx.fill();
+        ctx.fillStyle = P.night ? '#ffe2a0' : '#ffffff'; ctx.fillRect(p.x - 1.4 * s, p.y - 1.6 * s, 2.8 * s, 0.4 * s);
       } else if (p.t === 'crate') {
         const s = partScale(b, p, age);
         if (s <= 0.02) continue;
@@ -2536,10 +2661,10 @@ function drawZoneAnim(zonesOn) {
     const c = animCells[k], t = (clock - G.zoneT[c]) / 0.35;
     const z = G.zone[c];
     if (t >= 1 || !z) { done.push(c); animCells.splice(k, 1); continue; }
-    if (t <= 0 || (z !== ZP && !zonesOn)) continue;
+    if (t <= 0 || (z < ZP && !zonesOn)) continue;
     const x = (c % CW) * CELL + 5, y = ((c / CW) | 0) * CELL + 5, s = easeBack(t);
-    ctx.globalAlpha = z === ZP ? 1 : 0.55;
-    ctx.fillStyle = z === ZP ? P.grass : P.zone[z];
+    ctx.globalAlpha = z >= ZP ? 1 : 0.55;
+    ctx.fillStyle = z === ZP ? P.grass : z === ZK ? P.lotTop : P.zone[z];
     ctx.beginPath(); ctx.arc(x, y, 8 * s, 0, 7); ctx.fill();
   }
   ctx.globalAlpha = 1;
@@ -2547,6 +2672,32 @@ function drawZoneAnim(zonesOn) {
   if (done.length && !animCells.length) bakeTimer = 0.4;
 }
 
+function drawParking() {
+  for (const k of lotsK) {
+    if (!inView(k.cx, k.cy, 200)) continue;
+    const { ux, uy, vx, vy, SW, SD } = k, occ = k.occ === undefined ? 0.3 : k.occ;
+    ctx.strokeStyle = P.mark; ctx.lineWidth = 0.3;
+    ctx.beginPath();
+    for (const st of k.stalls) {
+      if (clock < st.t0) continue;
+      const sgn = st.row ? -1 : 1;
+      for (const side of [-1, 1]) {
+        const x = st.x + ux * side * SW / 2, y = st.y + uy * side * SW / 2;
+        ctx.moveTo(x - vx * SD / 2 * sgn, y - vy * SD / 2 * sgn); ctx.lineTo(x + vx * SD / 2 * sgn, y + vy * SD / 2 * sgn);
+      }
+    }
+    ctx.stroke();
+    // cars come and go: each stall flips between empty and taken every so often
+    for (const st of k.stalls) {
+      const t = clamp((clock - st.t0) / 0.4, 0, 1);
+      if (t <= 0 || hash(Math.floor((G.time + st.h * 40) / 40), st.h * 1e6 | 0, 3) > occ) continue;
+      ctx.save(); ctx.translate(st.x, st.y); ctx.rotate(Math.atan2(vy, vx)); ctx.scale(t, t);
+      ctx.fillStyle = P.car[(st.h * 8) | 0]; ctx.beginPath(); rrect(-CAR_LEN / 2, -1.25, CAR_LEN, 2.5, 0.8); ctx.fill();
+      ctx.fillStyle = 'rgba(20,30,40,0.45)'; ctx.fillRect(st.row ? -CAR_LEN * 0.28 : CAR_LEN * 0.08, -0.9, CAR_LEN * 0.18, 1.8);
+      ctx.restore();
+    }
+  }
+}
 function drawParksFlat() {
   for (const pk of parks) {
     if (pk.ponds.length) {
@@ -2639,6 +2790,7 @@ function draw() {
   ctx.drawImage(parkLayer, 0, 0, WW, WH);
   drawZoneAnim(zonesOn);
   drawParksFlat();
+  drawParking();
   if (viewMode === 'value' && lvGrid) { ctx.globalAlpha = 0.5; ctx.drawImage(overlayLayer, 0, 0, WW, WH); ctx.globalAlpha = 1; }
   drawRoads(-1);
   drawRoads(0);
@@ -2662,9 +2814,41 @@ function draw() {
   if (viewMode === 'traffic') drawTrafficOverlay();
   drawParticles();
   drawBadges(lots);
+  drawOutStubs();
   drawPreview();
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  drawOutLabels();
   drawScreenLabels();
+}
+// region connections: a dashed stub and a target ring where a road can link up
+function outDir(n) { return n.x <= 1 ? [1, 0] : n.x >= WW - 1 ? [-1, 0] : n.y <= 1 ? [0, 1] : [0, -1]; }
+function drawOutStubs() {
+  for (const o of G.outs) {
+    const n = G.nodes.get(o.id);
+    if (!n || n.edges.length || !inView(n.x, n.y, 80)) continue;
+    const [dx, dy] = outDir(n), pulse = 0.5 + 0.5 * Math.sin(clock * 3);
+    ctx.lineCap = 'butt'; ctx.setLineDash([6, 5]);
+    ctx.strokeStyle = P.night ? 'rgba(242,189,69,0.55)' : 'rgba(30,36,43,0.35)'; ctx.lineWidth = 14;
+    ctx.beginPath(); ctx.moveTo(n.x, n.y); ctx.lineTo(n.x + dx * 60, n.y + dy * 60); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.strokeStyle = P.night ? '#f2bd45' : '#e09a2e'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(n.x + dx * 4, n.y + dy * 4, 10 + pulse * 3, 0, 7); ctx.stroke();
+  }
+}
+function drawOutLabels() {
+  ctx.font = '600 12px "IBM Plex Sans", system-ui, sans-serif';
+  for (const o of G.outs) {
+    const n = G.nodes.get(o.id);
+    if (!n) continue;
+    const [dx, dy] = outDir(n), s = w2s(n.x + dx * 70, n.y + dy * 70);
+    if (s.x < -80 || s.y < -30 || s.x > vw + 80 || s.y > vh + 30) continue;
+    const on = n.edges.length > 0, text = `${on ? '↔' : '+'} ${o.name}`, tw = ctx.measureText(text).width;
+    const x = clamp(s.x - tw / 2 - 8, 6, vw - tw - 22), y = clamp(s.y - 11, 70, vh - 120);
+    ctx.fillStyle = on ? (P.night ? '#f2bd45' : '#f0b429') : (P.night ? 'rgba(32,38,44,0.9)' : 'rgba(251,252,246,0.92)');
+    ctx.beginPath(); rrect(x, y, tw + 16, 22, 11); ctx.fill();
+    ctx.fillStyle = on ? '#1e242b' : (P.night ? '#eef1e8' : '#1e242b');
+    ctx.fillText(text, x + 8, y + 15);
+  }
 }
 
 function drawTrafficOverlay() {
@@ -2744,7 +2928,7 @@ let hoverW = null, hoverScreen = null, rs = null, stroke = null, panDrag = null,
 let previewLabel = null;
 const pointers = new Map();
 const isPaint = () => tool === 'zone';
-const toolZone = () => ({ res: ZR, com: ZC, ind: ZI, park: ZP, none: 0 })[zoneType];
+const toolZone = () => ({ res: ZR, com: ZC, ind: ZI, park: ZP, parking: ZK, none: 0 })[zoneType];
 const showZones = () => tool === 'zone' || viewMode === 'zones';
 
 // find the road under the cursor, allowing for bridges being drawn lifted
@@ -2800,13 +2984,45 @@ function smoothFree(pts) {
   if (thin[thin.length - 1] !== pts[pts.length - 1]) thin.push(pts[pts.length - 1]);
   return chaikin(thin, 3);
 }
+// place a segment, then keep drawing from its end until Esc or right-click
+function finishSegment(pts, a, b, curve) {
+  if (!commitRoad(pts, a, b)) return;
+  const nb = snapAt(b.x, b.y);
+  rs = curve ? { stage: 'leg2', a: nb } : { stage: 'drag', a: nb };
+}
+const GRID_SIZES = [60, 85, 120];
+let gridIdx = 1;
+function gridLines(A, B, C) {
+  const W = dist(A.x, A.y, B.x, B.y);
+  if (W < 20) return [];
+  const ux = (B.x - A.x) / W, uy = (B.y - A.y) / W;
+  let vx = -uy, vy = ux;
+  if (!C) return [[A, B]];
+  let D = (C.x - A.x) * vx + (C.y - A.y) * vy;
+  if (D < 0) { vx = -vx; vy = -vy; D = -D; }
+  if (D < 20) return [[A, B]];
+  const size = GRID_SIZES[gridIdx], nu = Math.max(1, Math.round(W / size)), nv = Math.max(1, Math.round(D / size)), out = [];
+  for (let i = 0; i <= nv; i++) { const o = D * i / nv; out.push([{ x: A.x + vx * o, y: A.y + vy * o }, { x: B.x + vx * o, y: B.y + vy * o }]); }
+  for (let j = 0; j <= nu; j++) { const o = W * j / nu, p = { x: A.x + ux * o, y: A.y + uy * o }; out.push([p, { x: p.x + vx * D, y: p.y + vy * D }]); }
+  out.blocks = [nu, nv];
+  return out;
+}
+function gridCost(lines) { return lines.reduce((t, l) => t + roadCost(resample(l, 5), design), 0); }
+function buildGrid(P3) {
+  const lines = gridLines(P3[0], P3[1], P3[2]);
+  if (lines.length < 3) { toast('Make the grid bigger: click a corner, then along one side, then across.', 'bad'); return; }
+  const cost = gridCost(lines);
+  if (cost > G.money) { toast(`Not enough funds: this grid costs $${fmt(cost)}`, 'bad'); return; }
+  for (const l of lines) buildRoad(l.map(p => ({ x: p.x, y: p.y, z: 0 })), design, null, null, false);
+  toast(`Built a ${lines.blocks[0]} × ${lines.blocks[1]} block grid for $${fmt(cost)}.`);
+}
 function commitRoad(pts, a, b) {
-  if (!pts || pts.length < 2) return;
+  if (!pts || pts.length < 2) return false;
   pts = pts.map(p => ({ x: p.x, y: p.y }));
   pts[0] = { x: a.x, y: a.y };
   pts[pts.length - 1] = { x: b.x, y: b.y };
   pts = profiled(pts, a, b);
-  buildRoad(pts, design, a.node ? a : null, b.node ? b : null, false);
+  return buildRoad(pts, design, a.node ? a : null, b.node ? b : null, false);
 }
 function nearestJunction(x, y) {
   let best = null, bd = Math.max(16, 22 / cam.z);
@@ -2866,7 +3082,7 @@ cv.addEventListener('pointerdown', e => {
   pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
   if (pointers.size === 2) {
     stroke = null; panDrag = null;
-    if (rs && rs.stage !== 'end' && rs.stage !== 'leg2') rs = null;
+    if (rs && rs.down) rs = null;
     const [p1, p2] = [...pointers.values()];
     pinch = { d: Math.hypot(p1.x - p2.x, p1.y - p2.y), z: cam.z, mx: (p1.x + p2.x) / 2, my: (p1.y + p2.y) / 2, cx: cam.x, cy: cam.y };
     return;
@@ -2885,11 +3101,18 @@ cv.addEventListener('pointerdown', e => {
     const h = pickRoad(w.x, w.y, Math.max(8, 14 / cam.z));
     if (h) upgradeEdge(h.e, design); else toast('Click a road to rebuild it with this design.');
   } else if (tool === 'road') {
-    if (roadShape === 'straight') rs = { stage: 'drag', a: snapAt(w.x, w.y) };
-    else if (roadShape === 'free') rs = { stage: 'free', a: snapAt(w.x, w.y), pts: [w] };
-    else if (!rs) rs = { stage: 'leg', a: snapAt(w.x, w.y) };
+    const down = [e.clientX, e.clientY];
+    if (roadShape === 'grid') {
+      const sp = snapAt(w.x, w.y), q = { x: sp.x, y: sp.y };
+      if (!rs) rs = { stage: 'grid', pts: [q] };
+      else { rs.pts.push(rs.pts.length === 1 ? angleSnap(rs.pts[0], q) : q); if (rs.pts.length === 3) { buildGrid(rs.pts); rs = null; } }
+    } else if (roadShape === 'straight') {
+      if (!rs) rs = { stage: 'drag', a: snapAt(w.x, w.y), down };
+      else { const p = angleSnap(rs.a, w), b = snapAt(p.x, p.y); finishSegment([rs.a, b], rs.a, b, false); }
+    } else if (roadShape === 'free') rs = { stage: 'free', a: snapAt(w.x, w.y), pts: [w] };
+    else if (!rs) rs = { stage: 'leg', a: snapAt(w.x, w.y), down };
     else if (rs.stage === 'leg2') { rs.c = angleSnap(rs.a, w); rs.stage = 'end'; rs.b = null; }
-    else if (rs.stage === 'end') { const b = snapAt(w.x, w.y); rs.b = b; commitRoad(quadPts(rs.a, rs.c, b), rs.a, b); rs = null; }
+    else if (rs.stage === 'end') { const b = snapAt(w.x, w.y); rs.b = b; finishSegment(quadPts(rs.a, rs.c, b), rs.a, b, true); }
   } else if (isPaint()) {
     if (brushFill) stroke = { fill: true };
     else { stroke = { last: w }; paintCircle(w.x, w.y, BRUSH[brushIdx], toolZone()); paintFx(w.x, w.y); }
@@ -2950,13 +3173,18 @@ function endPointer(e) {
   }
   if (e.type === 'pointercancel') { rs = null; stroke = null; return; }
   if (rs) {
-    if (rs.stage === 'drag') { const p = angleSnap(rs.a, w); const b = snapAt(p.x, p.y); commitRoad([rs.a, b], rs.a, b); rs = null; }
+    const moved = rs.down ? Math.hypot(e.clientX - rs.down[0], e.clientY - rs.down[1]) > 12 : false;
+    if (rs.stage === 'drag' && rs.down) {
+      // a drag places the road straight away; a click waits for a second click at the end
+      if (moved) { const p = angleSnap(rs.a, w), b = snapAt(p.x, p.y); finishSegment([rs.a, b], rs.a, b, false); rs = null; }
+      else rs.down = null;
+    }
     else if (rs.stage === 'free') { const b = snapAt(w.x, w.y); rs.pts.push(b); commitRoad(smoothFree(rs.pts), rs.a, b); rs = null; }
-    else if (rs.stage === 'leg') {
+    else if (rs.stage === 'leg' && rs.down) {
       const c = angleSnap(rs.a, w);
       rs.c = c;
-      rs.stage = dist(rs.a.x, rs.a.y, c.x, c.y) > 12 ? 'end' : 'leg2';
-      rs.b = null;
+      rs.stage = moved ? 'end' : 'leg2';
+      rs.b = null; rs.down = null;
     }
   }
   if (stroke) {
@@ -3001,7 +3229,7 @@ window.addEventListener('keydown', e => {
   if (state !== 'play') return;
   const tk = { 1: 'inspect', 2: 'road', 3: 'junction', 4: 'zone', 5: 'doze' }[k];
   if (tk) setTool(tk);
-  if (tool === 'road') { if (k === 'z') setShape('straight'); if (k === 'x') setShape('curve'); if (k === 'c') setShape('free'); }
+  if (tool === 'road') { if (k === 'z') setShape('straight'); if (k === 'x') setShape('curve'); if (k === 'c') setShape('free'); if (k === 'v') setShape('grid'); }
   if (k === 'escape') { rs = null; stroke = null; selected = null; $('tip').hidden = true; }
   if (k === '=' || k === '+') { cam.z *= 1.2; clampCam(); }
   if (k === '-') { cam.z /= 1.2; clampCam(); }
@@ -3035,6 +3263,20 @@ function drawPreview() {
     }
     return;
   }
+  if (tool === 'road' && roadShape === 'grid') {
+    const T = specOf(design), sp = snapAt(w.x, w.y), hv = { x: sp.x, y: sp.y };
+    if (!rs) { previewLabel = { text: 'Click a corner of the grid', bad: false }; ctx.fillStyle = ink; ctx.beginPath(); ctx.arc(hv.x, hv.y, 2, 0, 7); ctx.fill(); return; }
+    const lines = rs.pts.length === 1 ? gridLines(rs.pts[0], angleSnap(rs.pts[0], hv)) : gridLines(rs.pts[0], rs.pts[1], hv);
+    ctx.lineCap = 'round';
+    for (const [a, b] of lines) {
+      ctx.strokeStyle = P.night ? 'rgba(242,189,69,0.45)' : 'rgba(30,36,43,0.35)'; ctx.lineWidth = T.w;
+      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+    }
+    if (rs.pts.length === 1) previewLabel = { text: 'Click along one side of the grid', bad: false };
+    else if (lines.blocks) { const cost = gridCost(lines); previewLabel = { text: `${lines.blocks[0]} × ${lines.blocks[1]} blocks · $${fmt(cost)}`, bad: cost > G.money }; }
+    else previewLabel = { text: 'Click across to set the depth', bad: false };
+    return;
+  }
   if (tool === 'road') {
     const pts = roadPreviewPts();
     const T = specOf(design);
@@ -3062,7 +3304,8 @@ function drawPreview() {
       }
       const lvl = elevLevel < 0 ? ' · tunnel' : elevLevel === 1 ? ' · bridge' : elevLevel === 2 ? ' · high bridge' : '';
       previewLabel = { text: `${T.name}${lvl} · $${fmt(cost)}`, bad };
-    } else if (rs && rs.stage === 'leg2') previewLabel = { text: 'Click to set the bend', bad: false };
+    } else if (rs && rs.stage === 'leg2') previewLabel = { text: 'Click to set the bend · Esc to stop', bad: false };
+    else if (rs && rs.stage === 'drag') previewLabel = { text: 'Click to set the end · Esc to stop', bad: false };
     const sn = rs ? (rs.stage === 'end' || rs.stage === 'drag' ? rs.b : null) : snapAt(w.x, w.y);
     for (const s of [rs && rs.a, sn]) {
       if (!s || (!s.node && !s.edge)) continue;
@@ -3129,7 +3372,7 @@ function describeAt(x, y) {
     sw = lot.z;
     if (!b) { title = `Empty ${zn.toLowerCase()} plot`; notes.push(lot.attach ? 'Waiting for demand.' : 'Not connected to a road.'); }
     else {
-      const names = { 2: ['', 'House', 'Family house', 'Terraced houses', 'Apartments'], 3: ['', 'Corner shop', 'Shops', 'Supermarket', 'Office tower'], 4: ['', 'Workshop', 'Warehouse', 'Factory'] };
+      const names = { 2: ['', 'House', 'Family house', 'Terraced houses', 'Apartments'], 3: lot.b && lot.b.units && lot.w >= 26 ? ['', 'Strip mall', 'Strip mall', 'Shopping plaza', 'Shopping plaza'] : ['', 'Corner shop', 'Shops', 'Supermarket', 'Office tower'], 4: ['', 'Workshop', 'Warehouse', 'Factory'] };
       title = b.abandoned ? 'Abandoned' : names[lot.z][b.level];
       if (lot.z === ZR) {
         rows.push(['Residents', RES_CAP(lot)]);
@@ -3156,12 +3399,13 @@ function describeAt(x, y) {
       rows.push(['Cars', cnt], ['Stopped', slow, slow > 4]);
       if (T.noFront) notes.push('No driveways: buildings cannot front onto it.');
       notes.push('Use Roads → Upgrade to rebuild it with another design.');
-      if (e.a === G.outside || e.b === G.outside) notes.push('Connects to the region. Commuters and trucks come and go here.');
+      for (const o of G.outs) if (e.a === o.id || e.b === o.id) notes.push(`Connects to ${o.name}. Commuters, trucks and through traffic come and go here.`);
     } else {
       const z = zoneAt(x, y);
-      title = z === ZP ? 'Park' : z ? ({ 2: 'Homes', 3: 'Shops', 4: 'Industry' }[z] + ' zone') : waterAt(x, y) ? 'River' : 'Open land';
+      title = z === ZP ? 'Park' : z === ZK ? 'Parking lot' : z ? ({ 2: 'Homes', 3: 'Shops', 4: 'Industry' }[z] + ' zone') : waterAt(x, y) ? 'River' : 'Open land';
+      if (z === ZK) notes.push('Shops nearby get more customers and grow faster.');
       if (z) sw = z;
-      if (z && z !== ZP) notes.push('Buildings fit along roads inside the painted area.');
+      if (z && z < ZP) notes.push('Buildings fit along roads inside the painted area.');
       if (z === ZP) notes.push('Raises land value nearby.');
       if (!waterAt(x, y)) rows.push(['Land value', Math.round(lvAt(x, y))]);
     }
@@ -3253,6 +3497,8 @@ function setPreset(k) { design = { ...PRESETS[k] }; syncDesign(); }
 function setShape(s) {
   roadShape = s; rs = null;
   for (const b of document.querySelectorAll('[data-shape]')) b.classList.toggle('on', b.dataset.shape === s);
+  $('gridSize').hidden = s !== 'grid';
+  $('gridSize').textContent = `Blocks ${Math.round(GRID_SIZES[gridIdx] * 0.75)} m`;
 }
 function setBrush(v) {
   if (v === 'fill') brushFill = true; else { brushFill = false; brushIdx = +v; }
@@ -3273,6 +3519,7 @@ for (const b of document.querySelectorAll('[data-step]')) b.addEventListener('cl
   design[k] = clamp(design[k] + dlt, k === 'f' ? 1 : 0, 5);
   syncDesign();
 });
+$('gridSize').addEventListener('click', () => { gridIdx = (gridIdx + 1) % GRID_SIZES.length; setShape('grid'); });
 $('dMore').addEventListener('click', () => { const o = document.body.classList.toggle('design-open'); $('dMore').setAttribute('aria-expanded', o); $('dMore').classList.toggle('on', o); });
 $('dMed').addEventListener('click', () => { design.med = MEDIAN_ORDER[(MEDIAN_ORDER.indexOf(design.med) + 1) % MEDIAN_ORDER.length]; syncDesign(); });
 $('dSpeed').addEventListener('click', () => { design.kmh = SPEEDS[(SPEEDS.indexOf(design.kmh) + 1) % SPEEDS.length]; syncDesign(); });
